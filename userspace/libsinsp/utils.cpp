@@ -1266,7 +1266,7 @@ void sinsp_unexpected(const char* file, int line)
 		}
 		catch(sinsp_exception& exc)
 		{
-			msg += exc.displayText();
+			msg += exc.what();
 		}
 		catch(std::exception& exc)
 		{
@@ -1276,7 +1276,7 @@ void sinsp_unexpected(const char* file, int line)
 		{
 			msg += "unknown exception";
 		}
-		std::cerr << "Fatal Error: [" << msg << "], File: " << file << ", Line: " << line std::endl;
+		std::cerr << "Fatal Error: [" << msg << "], File: " << file << ", Line: " << line << std::endl;
 		kill(getpid(), SIGINT);
 	}
 	catch(...)
