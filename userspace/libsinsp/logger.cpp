@@ -111,8 +111,19 @@ void sinsp_logger::set_severity(severity sev)
 	m_sev = sev;
 }
 
+void sinsp_logger::log(string msg, event_severity sev)
+{
+	if(is_callback())
+	{
+		snprintf(m_tbuf, sizeof(m_tbuf), "%s", msg.c_str());
+		(*m_callback)(m_tbuf, (uint32_t)sev);
+	}
+}
+
 void sinsp_logger::log(string msg, severity sev)
 {
+	if(!is_callback() && is_user_event(sev)) { return; }
+
 	struct timeval ts;
 
 	if(sev < m_sev)
@@ -139,7 +150,7 @@ void sinsp_logger::log(string msg, severity sev)
 		snprintf(m_tbuf, sizeof(m_tbuf), "%s", msg.c_str());
 	}
 
-	if(m_flags & sinsp_logger::OT_CALLBACK)
+	if(is_callback())
 	{
 		(*m_callback)(m_tbuf, (uint32_t)sev);
 	}
@@ -162,6 +173,12 @@ void sinsp_logger::log(string msg, severity sev)
 
 char* sinsp_logger::format(severity sev, const char* fmt, ...)
 {
+	if(!is_callback() && is_user_event(sev))
+	{
+		m_tbuf[0] = '\0';
+		return m_tbuf;
+	}
+
 	va_list ap;
 
 	va_start(ap, fmt);
@@ -175,6 +192,12 @@ char* sinsp_logger::format(severity sev, const char* fmt, ...)
 
 char* sinsp_logger::format(const char* fmt, ...)
 {
+	if(!is_callback())
+	{
+		m_tbuf[0] = '\0';
+		return m_tbuf;
+	}
+
 	va_list ap;
 
 	va_start(ap, fmt);

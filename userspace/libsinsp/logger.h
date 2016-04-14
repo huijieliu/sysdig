@@ -36,6 +36,20 @@ public:
 		SEV_MAX = SEV_CRITICAL,
 	};
 
+	enum event_severity
+	{
+		SEV_EVT_FATAL = 10,
+		SEV_EVT_CRITICAL = 11,
+		SEV_EVT_ERROR = 12,
+		SEV_EVT_WARNING = 13,
+		SEV_EVT_NOTICE = 14,
+		SEV_EVT_INFORMATION = 15,
+		SEV_EVT_DEBUG = 16,
+		SEV_EVT_TRACE = 17,
+		SEV_EVT_MIN = SEV_EVT_FATAL,
+		SEV_EVT_MAX = SEV_EVT_TRACE
+	};
+
 	enum output_type
 	{
 		OT_NONE = 0,
@@ -59,14 +73,30 @@ public:
 	void set_severity(severity sev);
 
 	void log(string msg, severity sev=SEV_INFO);
+	void log(string msg, event_severity sev);
 	// Log functions that accepts printf syntax and return the formatted buffer.
 	char* format(severity sev, const char* fmt, ...);
 	char* format(const char* fmt, ...);
 
 private:
+	bool is_callback() const;
+	bool is_user_event(severity sev) const;
+
 	FILE* m_file;
 	sinsp_logger_callback m_callback;
 	uint32_t m_flags;
 	severity m_sev;
 	char m_tbuf[32768];
 };
+
+inline bool sinsp_logger::is_callback() const
+{
+	 return (m_flags & sinsp_logger::OT_CALLBACK);
+}
+
+inline bool sinsp_logger::is_user_event(severity sev) const
+{
+	 return (static_cast<int>(sev) >= static_cast<int>(SEV_EVT_MIN) &&
+			static_cast<int>(sev) <= static_cast<int>(SEV_EVT_MAX));
+}
+

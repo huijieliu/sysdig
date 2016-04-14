@@ -534,6 +534,12 @@ void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 			os << data.m_name << ',' << data.m_uid << ',' << data.m_namespace << ']';
 			g_logger.log(os.str(), sinsp_logger::SEV_INFO);
 			//g_logger.log(root.toStyledString(), sinsp_logger::SEV_DEBUG);
+			std::ostringstream lostr;
+			lostr << "name: \"K8s Dispatcher\"\n"
+					"description: \"" << os.str() << "\"\n"
+					"scope: \"kubernetes.namespace: " << data.m_namespace << "\"\n"
+					"tags: \"key:val, key2:val2\"" << std::flush;
+			g_logger.log(lostr.str(), sinsp_logger::SEV_EVT_INFORMATION);
 			{
 				K8S_LOCK_GUARD_MUTEX;
 				m_state.update_cache(m_type);
