@@ -537,8 +537,8 @@ void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 			std::ostringstream lostr;
 			lostr << "name: \"K8s Dispatcher\"\n"
 					"description: \"" << os.str() << "\"\n"
-					"scope: \"kubernetes.namespace: " << data.m_namespace << "\"\n"
-					"tags: \"key:val, key2:val2\"" << std::flush;
+					"scope: \"kubernetes.namespace.name: " << data.m_namespace << "\"\n"
+					"tags:\n  key1: \"val1\"\n  key2: \"val2\"" << std::flush;
 			g_logger.log(lostr.str(), sinsp_logger::SEV_EVT_INFORMATION);
 			{
 				K8S_LOCK_GUARD_MUTEX;
