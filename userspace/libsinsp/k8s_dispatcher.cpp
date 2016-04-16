@@ -12,16 +12,9 @@
 #include <iostream>
 
 
-k8s_dispatcher::k8s_dispatcher(k8s_component::type t, k8s_state_t& state
-#ifndef K8S_DISABLE_THREAD
-	,std::mutex& mut
-#endif
-	) :
+k8s_dispatcher::k8s_dispatcher(k8s_component::type t, k8s_state_t& state) :
 	m_type(t),
 	m_state(state)
-#ifndef K8S_DISABLE_THREAD
-	,m_mutex(mut)
-#endif
 {
 }
 
@@ -166,8 +159,6 @@ void k8s_dispatcher::log_error(const Json::Value& root, const std::string& comp)
 
 void k8s_dispatcher::handle_node(const Json::Value& root, const msg_data& data)
 {
-	K8S_LOCK_GUARD_MUTEX;
-
 	if(data.m_reason == COMPONENT_ADDED)
 	{
 		if(m_state.has(m_state.get_nodes(), data.m_uid))
@@ -252,8 +243,6 @@ void k8s_dispatcher::handle_node(const Json::Value& root, const msg_data& data)
 
 void k8s_dispatcher::handle_namespace(const Json::Value& root, const msg_data& data)
 {
-	K8S_LOCK_GUARD_MUTEX;
-
 	if(data.m_reason == COMPONENT_ADDED)
 	{
 		if(m_state.has(m_state.get_namespaces(), data.m_uid))
@@ -320,8 +309,6 @@ void k8s_dispatcher::handle_namespace(const Json::Value& root, const msg_data& d
 
 void k8s_dispatcher::handle_pod(const Json::Value& root, const msg_data& data)
 {
-	K8S_LOCK_GUARD_MUTEX;
-
 	if(data.m_reason == COMPONENT_ADDED)
 	{
 		const Json::Value& object = root["object"];
@@ -382,8 +369,6 @@ void k8s_dispatcher::handle_pod(const Json::Value& root, const msg_data& data)
 
 void k8s_dispatcher::handle_rc(const Json::Value& root, const msg_data& data)
 {
-	K8S_LOCK_GUARD_MUTEX;
-
 	if(data.m_reason == COMPONENT_ADDED)
 	{
 		if(m_state.has(m_state.get_rcs(), data.m_uid))
@@ -438,8 +423,6 @@ void k8s_dispatcher::handle_rc(const Json::Value& root, const msg_data& data)
 
 void k8s_dispatcher::handle_service(const Json::Value& root, const msg_data& data)
 {
-	K8S_LOCK_GUARD_MUTEX;
-
 	if(data.m_reason == COMPONENT_ADDED)
 	{
 		const Json::Value& object = root["object"];
@@ -490,6 +473,25 @@ void k8s_dispatcher::handle_service(const Json::Value& root, const msg_data& dat
 	}
 }
 
+void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
+{
+	//g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+
+	if(data.m_reason == COMPONENT_ADDED)
+	{
+		const Json::Value& object = root["object"];
+		if(!object.isNull())
+		{
+			k8s_event_t& evt = m_state.add_component<k8s_events, k8s_event_t>(m_state.get_events(), data.m_name, data.m_uid, data.m_namespace);
+			m_state.update_event(evt, object);
+		}
+	}
+	else
+	{
+		g_logger.log(std::string("Unsupported K8S EVENT reason: ") + std::to_string(data.m_reason), sinsp_logger::SEV_ERROR);
+	}
+}
+
 void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 {
 	Json::Value root;
@@ -524,6 +526,10 @@ void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 					os << "SERVICE,";
 					handle_service(root, data);
 					break;
+				case k8s_component::K8S_EVENTS:
+					os << "EVENT,";
+					handle_event(root, data);
+					break;
 				default:
 				{
 					std::ostringstream eos;
@@ -535,13 +541,12 @@ void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 			g_logger.log(os.str(), sinsp_logger::SEV_INFO);
 			//g_logger.log(root.toStyledString(), sinsp_logger::SEV_DEBUG);
 			std::ostringstream lostr;
-			lostr << "name: \"K8s Dispatcher\"\n"
+			/*lostr << "name: \"K8s Dispatcher\"\n"
 					"description: \"" << os.str() << "\"\n"
 					"scope: \"kubernetes.namespace.name: " << data.m_namespace << "\"\n"
 					"tags:\n  key1: \"val1\"\n  key2: \"val2\"" << std::flush;
-			g_logger.log(lostr.str(), sinsp_logger::SEV_EVT_INFORMATION);
+			g_logger.log(lostr.str(), sinsp_logger::SEV_EVT_INFORMATION);*/
 			{
-				K8S_LOCK_GUARD_MUTEX;
 				m_state.update_cache(m_type);
 #ifdef HAS_CAPTURE
 				if(enqueue)

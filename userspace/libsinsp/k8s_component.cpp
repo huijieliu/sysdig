@@ -3,6 +3,7 @@
 //
 
 #include "k8s_component.h"
+#include "k8s_state.h"
 #include "sinsp.h"
 #include "sinsp_int.h"
 #include <sstream>
@@ -66,17 +67,18 @@ const k8s_container::port* k8s_container::get_port(const std::string& port_name)
 // component
 //
 
-const k8s_component::component_map k8s_component::list =
+const k8s_component::type_map k8s_component::list =
 {
 	{ k8s_component::K8S_NODES,                  "nodes"                  },
 	{ k8s_component::K8S_NAMESPACES,             "namespaces"             },
 	{ k8s_component::K8S_PODS,                   "pods"                   },
 	{ k8s_component::K8S_REPLICATIONCONTROLLERS, "replicationcontrollers" },
-	{ k8s_component::K8S_SERVICES,               "services"               }
+	{ k8s_component::K8S_SERVICES,               "services"               },
+	{ k8s_component::K8S_EVENTS,                 "events"                 }
 };
 
-k8s_component::k8s_component(const std::string& name, const std::string& uid, const std::string& ns) : 
-	m_name(name), m_uid(uid), m_ns(ns)
+k8s_component::k8s_component(type comp_type, const std::string& name, const std::string& uid, const std::string& ns) : 
+	m_type(comp_type), m_name(name), m_uid(uid), m_ns(ns)
 {
 }
 
@@ -347,6 +349,8 @@ std::string k8s_component::get_name(type t)
 		return "replicationcontrollers";
 	case K8S_SERVICES:
 		return "services";
+	case K8S_EVENTS:
+		return "events";
 	case K8S_COMPONENT_COUNT:
 	default:
 		break;
@@ -378,6 +382,10 @@ k8s_component::type k8s_component::get_type(const std::string& name)
 	else if(name == "services")
 	{
 		return K8S_SERVICES;
+	}
+	else if(name == "events")
+	{
+		return K8S_EVENTS;
 	}
 
 	std::ostringstream os;
@@ -462,7 +470,7 @@ bool k8s_component::selectors_in_labels(const k8s_pair_list& labels) const
 // namespace
 //
 k8s_ns_t::k8s_ns_t(const std::string& name, const std::string& uid, const std::string& ns) :
-	k8s_component(name, uid, ns)
+	k8s_component(COMPONENT_TYPE, name, uid, ns)
 {
 }
 
@@ -472,7 +480,7 @@ k8s_ns_t::k8s_ns_t(const std::string& name, const std::string& uid, const std::s
 //
 
 k8s_node_t::k8s_node_t(const std::string& name, const std::string& uid, const std::string& ns) :
-	k8s_component(name, uid, ns)
+	k8s_component(COMPONENT_TYPE, name, uid, ns)
 {
 }
 
@@ -513,7 +521,7 @@ k8s_node_t::host_ip_list k8s_node_t::extract_addresses(const Json::Value& status
 //
 
 k8s_pod_t::k8s_pod_t(const std::string& name, const std::string& uid, const std::string& ns) :
-	k8s_component(name, uid, ns)
+	k8s_component(COMPONENT_TYPE, name, uid, ns)
 {
 }
 
@@ -548,7 +556,7 @@ k8s_container* k8s_pod_t::get_container(const std::string& container_name)
 // replication controller
 //
 k8s_rc_t::k8s_rc_t(const std::string& name, const std::string& uid, const std::string& ns) : 
-	k8s_component(name, uid, ns)
+	k8s_component(COMPONENT_TYPE, name, uid, ns)
 {
 }
 
@@ -583,7 +591,7 @@ int k8s_rc_t::get_replica(const Json::Value& item)
 // service
 //
 k8s_service_t::k8s_service_t(const std::string& name, const std::string& uid, const std::string& ns) : 
-	k8s_component(name, uid, ns)
+	k8s_component(COMPONENT_TYPE, name, uid, ns)
 {
 }
 
@@ -600,3 +608,92 @@ std::vector<const k8s_pod_t*> k8s_service_t::get_selected_pods(const std::vector
 	return pod_vec;
 }
 
+//
+// event
+//
+
+k8s_event_t::k8s_event_t(const std::string& name, const std::string& uid, const std::string& ns) :
+	k8s_component(COMPONENT_TYPE, name, uid, ns),
+	m_scope("kubernetes.")
+{
+}
+
+void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
+{
+	const Json::Value& obj = item["involvedObject"];
+	if(!obj.isNull())
+	{
+		m_type = get_json_string(obj, "kind");
+		m_component_name = get_json_string(obj, "name");
+		m_component_uid = get_json_string(obj, "uid");
+		g_logger.log("EVENT update: component name:" + m_component_name + ", uid=" + m_component_uid + ", type=" + m_type, sinsp_logger::SEV_DEBUG);
+	}
+	else
+	{
+		g_logger.log("K8s event: cannot get involved object (null)", sinsp_logger::SEV_ERROR);
+	}
+
+	std::string ts = get_json_string(item , "lastTimestamp");
+	if(!ts.empty())
+	{
+		struct tm tm;
+		memset(&tm, 0, sizeof(struct tm));
+		strptime(ts.c_str(), "%Y-%m-%dT%H:%M:%SZ", &tm);
+		m_epoch_time_s = 0;
+		if((m_epoch_time_s = mktime(&tm)) == (time_t) -1)
+		{
+			g_logger.log("K8s event: cannot convert [" + ts + "] to epoch timestamp", sinsp_logger::SEV_ERROR);
+		}
+		g_logger.log("EVENT update: time:" + std::to_string(m_epoch_time_s), sinsp_logger::SEV_DEBUG);
+	}
+	else
+	{
+		g_logger.log("K8s event: cannot convert time (null, empty or not string)", sinsp_logger::SEV_ERROR);
+	}
+
+	const Json::Value& metadata = item["metadata"];
+	if(!metadata.isNull())
+	{
+		m_event_name = get_json_string(metadata, "namespace") + '/' + get_json_string(metadata, "name");
+		g_logger.log("EVENT name:" + m_event_name, sinsp_logger::SEV_DEBUG);
+	}
+	else
+	{
+		g_logger.log("K8s event: cannot get metadata (null)", sinsp_logger::SEV_ERROR);
+	}
+
+	m_description = get_json_string(item, "message");
+	g_logger.log("EVENT message:" + m_description, sinsp_logger::SEV_DEBUG);
+
+	if(!m_component_uid.empty())
+	{
+		std::string t;
+		const k8s_component* comp = state.get_component(m_component_uid, &t);
+		if(comp && !t.empty())
+		{
+			ASSERT(m_scope == "kubernetes.");
+			m_scope.append(t).append(".name=").append(comp->get_name());
+			const std::string& ns = get_namespace();
+			if(!ns.empty())
+			{
+				m_scope.append(" and kubernetes.namespace.name=").append(ns);
+			}
+
+			for(const auto& label : comp->get_labels())
+			{
+				m_tags[label.first] = label.second;
+				g_logger.log("EVENT label: [" + label.first + ':' + label.second + ']', sinsp_logger::SEV_DEBUG);
+				m_scope.append(" and kubernetes.").append(t).append(".label.").append(label.first).append(1, '=').append(label.second);
+			}
+		}
+		else
+		{
+			g_logger.log("K8s event: cannot obtain tags (component not found)", sinsp_logger::SEV_ERROR);
+		}
+	}
+	else
+	{
+		g_logger.log("K8s event: cannot obtain tags (UID not retrieved)", sinsp_logger::SEV_ERROR);
+	}
+	//g_logger.log(Json::FastWriter().write(item), sinsp_logger::SEV_DEBUG);
+}

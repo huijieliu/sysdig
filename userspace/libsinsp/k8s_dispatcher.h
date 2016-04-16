@@ -42,11 +42,7 @@ public:
 	k8s_dispatcher() = delete;
 	
 	k8s_dispatcher(k8s_component::type t,
-		k8s_state_t& state
-#ifndef K8S_DISABLE_THREAD
-		,std::mutex& mut
-#endif
-	);
+		k8s_state_t& state);
 
 	void enqueue(k8s_event_data&& data);
 
@@ -70,6 +66,7 @@ private:
 	void handle_pod(const Json::Value& root, const msg_data& data);
 	void handle_rc(const Json::Value& root, const msg_data& data);
 	void handle_service(const Json::Value& root, const msg_data& data);
+	void handle_event(const Json::Value& root, const msg_data& data);
 
 	// clears the content of labels and fills it with new values, if any
 	template <typename T>
@@ -112,9 +109,6 @@ private:
 	k8s_component::type m_type;
 	list                m_messages;
 	k8s_state_t&        m_state;
-#ifndef K8S_DISABLE_THREAD
-	std::mutex&         m_mutex;
-#endif
 };
 
 

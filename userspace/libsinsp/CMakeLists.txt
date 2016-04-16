@@ -58,6 +58,7 @@ add_library(sinsp STATIC
 	sinsp_curl.cpp
 	uri.cpp
 	utils.cpp
+	user_event.cpp
 	value_parser.cpp
 	viewinfo.cpp)
 

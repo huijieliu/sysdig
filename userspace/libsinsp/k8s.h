@@ -45,9 +45,9 @@ public:
 
 	const k8s_state_t& get_state(bool rebuild = false);
 
-	bool watch_in_thread() const;
-
 	void watch();
+
+	bool watch_in_thread() const;
 
 	void stop_watching();
 
@@ -66,7 +66,7 @@ private:
 
 	void build_state();
 
-	void parse_json(const std::string& json, const k8s_component::component_map::value_type& component);
+	void parse_json(const std::string& json, const k8s_component::type_map::value_type& component);
 
 	void stop_watch();
 
@@ -76,36 +76,30 @@ private:
 	// so we have to go with the forward declaration above and pointers here ...
 	typedef std::map<k8s_component::type, k8s_dispatcher*> dispatch_map;
 
-#ifdef K8S_DISABLE_THREAD
 	static dispatch_map make_dispatch_map(k8s_state_t& state);
-#else
-	static dispatch_map make_dispatch_map(k8s_state_t& state, std::mutex& mut);
-#endif // K8S_DISABLE_THREAD
 
-	K8S_DECLARE_MUTEX;
 	bool         m_watch;
-	bool         m_watch_in_thread;
 	k8s_state_t  m_state;
 	dispatch_map m_dispatch;
+	bool         m_watch_in_thread;
 #ifdef HAS_CAPTURE
 	k8s_net*     m_net;
 #endif
 
-	static const k8s_component::component_map m_components;
+	static const k8s_component::type_map m_components;
 	friend class k8s_test;
 };
-
-inline bool k8s::watch_in_thread() const
-{
-	return m_watch_in_thread;
-}
 
 inline bool k8s::is_alive() const
 {
 #ifdef HAS_CAPTURE
 	ASSERT(m_net);
-	return m_net->is_healthy() && m_net->is_watching();
+	return m_net->is_healthy();
 #endif
 	return true;
 }
 
+inline bool k8s::watch_in_thread() const
+{
+	return m_watch_in_thread;
+}

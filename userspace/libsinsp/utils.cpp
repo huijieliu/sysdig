@@ -1239,121 +1239,13 @@ bool sinsp_numparser::tryparsed32_fast(const char* str, uint32_t strlen, int32_t
 // JSON helpers
 ///////////////////////////////////////////////////////////////////////////////
 
-std::string get_json_string(const Json::Value& root, const std::string& name)
+std::string get_json_string(const Json::Value& obj, const std::string& name)
 {
 	std::string ret;
-	const Json::Value& json_val = root[name];
-	if(!json_val.isNull() && json_val.isString())
+	const Json::Value& json_val = obj[name];
+	if(!json_val.isNull() && json_val.isConvertibleTo(Json::stringValue))
 	{
 		ret = json_val.asString();
 	}
 	return ret;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// Mutex
-///////////////////////////////////////////////////////////////////////////////
-
-void sinsp_unexpected(const char* file, int line)
-{
-#ifdef _DEBUG
-	try
-	{
-		std::string msg("Unexpected exception in noexcept function or destructor: ");
-		try
-		{
-			throw;
-		}
-		catch(sinsp_exception& exc)
-		{
-			msg += exc.what();
-		}
-		catch(std::exception& exc)
-		{
-			msg += exc.what();
-		}
-		catch(...)
-		{
-			msg += "unknown exception";
-		}
-		std::cerr << "Fatal Error: [" << msg << "], File: " << file << ", Line: " << line << std::endl;
-		kill(getpid(), SIGINT);
-	}
-	catch(...)
-	{
-	}
-#endif
-}
-
-sinsp_mutex::sinsp_mutex(mutex_type_t type)
-{
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-#ifdef PTHREAD_MUTEX_RECURSIVE_NP
-	pthread_mutexattr_settype_np(&attr, type == SINSP_MUTEX_RECURSIVE ? PTHREAD_MUTEX_RECURSIVE_NP : PTHREAD_MUTEX_NORMAL_NP);
-#else
-	pthread_mutexattr_settype(&attr, type == SINSP_MUTEX_RECURSIVE ? PTHREAD_MUTEX_RECURSIVE : PTHREAD_MUTEX_NORMAL);
-#endif // PTHREAD_MUTEX_RECURSIVE_NP
-	if(pthread_mutex_init(&m_mutex, &attr))
-	{
-		pthread_mutexattr_destroy(&attr);
-		throw sinsp_exception("cannot create mutex");
-	}
-	pthread_mutexattr_destroy(&attr);
-}
-
-sinsp_mutex::~sinsp_mutex()
-{
-	pthread_mutex_destroy(&m_mutex);
-}
-
-void sinsp_mutex::lock()
-{
-	if(pthread_mutex_lock(&m_mutex))
-	{
-		throw sinsp_exception("cannot lock mutex");
-	}
-}
-
-bool sinsp_mutex::try_lock()
-{
-	int rc = pthread_mutex_trylock(&m_mutex);
-	if(rc == 0)           { return true; }
-	else if (rc == EBUSY) { return false; }
-	else                  { throw sinsp_exception("cannot lock mutex"); }
-}
-
-bool sinsp_mutex::try_lock(long milliseconds)
-{
-	struct timespec abstime;
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	abstime.tv_sec  = tv.tv_sec + milliseconds / 1000;
-	abstime.tv_nsec = tv.tv_usec*1000 + (milliseconds % 1000)*1000000;
-	if(abstime.tv_nsec >= 1000000000)
-	{
-		abstime.tv_nsec -= 1000000000;
-		abstime.tv_sec++;
-	}
-	int rc = pthread_mutex_timedlock(&m_mutex, &abstime);
-	if(rc == 0)              { return true; }
-	else if(rc == ETIMEDOUT) { return false; }
-	else                     { throw sinsp_exception("cannot lock mutex"); }
-}
-
-void sinsp_mutex::unlock()
-{
-	if(pthread_mutex_unlock(&m_mutex))
-	{
-		throw sinsp_exception("cannot unlock mutex");
-	}
-}
-
-sinsp_fast_mutex::sinsp_fast_mutex(): sinsp_mutex(SINSP_MUTEX_RECURSIVE)
-{
-}
-
-
-sinsp_fast_mutex::~sinsp_fast_mutex()
-{
 }

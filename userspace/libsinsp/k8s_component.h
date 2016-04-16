@@ -10,6 +10,8 @@
 #include "json/json.h"
 #include "sinsp.h"
 #include "sinsp_int.h"
+#include "logger.h"
+#include "user_event.h"
 #include <vector>
 #include <unordered_set>
 
@@ -92,16 +94,17 @@ public:
 		K8S_PODS,
 		K8S_REPLICATIONCONTROLLERS,
 		K8S_SERVICES,
+		K8S_EVENTS,
 		K8S_COMPONENT_COUNT
 	};
 
 	typedef std::pair<type, std::string> component_pair;
-	typedef std::map<type, std::string> component_map;
-	static const component_map list;
+	typedef std::map<type, std::string> type_map;
+	static const type_map list;
 
 	k8s_component() = delete;
 
-	k8s_component(const std::string& name, const std::string& uid, const std::string& ns = "");
+	k8s_component(type comp_type, const std::string& name, const std::string& uid, const std::string& ns = "");
 
 	const std::string& get_name() const;
 
@@ -169,6 +172,7 @@ public:
 	bool selectors_in_labels(const k8s_pair_list& labels) const;
 
 private:
+	type          m_type;
 	std::string   m_name;
 	std::string   m_uid;
 	std::string   m_ns;
@@ -186,6 +190,7 @@ private:
 class k8s_ns_t : public k8s_component
 {
 public:
+	static const k8s_component::type COMPONENT_TYPE = K8S_NAMESPACES;
 	k8s_ns_t(const std::string& name, const std::string& uid, const std::string& ns = "");
 };
 
@@ -198,6 +203,8 @@ class k8s_node_t : public k8s_component
 {
 public:
 	typedef std::unordered_set<std::string> host_ip_list;
+
+	static const k8s_component::type COMPONENT_TYPE = K8S_NODES;
 
 	k8s_node_t(const std::string& name, const std::string& uid, const std::string& ns = "");
 
@@ -225,6 +232,8 @@ class k8s_pod_t : public k8s_component
 public:
 	typedef std::vector<std::string> container_id_list;
 	typedef k8s_container::list container_list;
+
+	static const k8s_component::type COMPONENT_TYPE = K8S_PODS;
 
 	k8s_pod_t(const std::string& name, const std::string& uid, const std::string& ns = "");
 
@@ -280,6 +289,8 @@ class k8s_rc_t : public k8s_component
 {
 public:
 	static const int UNKNOWN_REPLICAS = -1;
+	static const k8s_component::type COMPONENT_TYPE = K8S_NAMESPACES;
+
 	k8s_rc_t(const std::string& name, const std::string& uid, const std::string& ns = "");
 
 	std::vector<const k8s_pod_t*> get_selected_pods(const std::vector<k8s_pod_t>& pods) const;
@@ -315,6 +326,8 @@ public:
 
 	typedef std::vector<net_port> port_list;
 
+	static const k8s_component::type COMPONENT_TYPE = K8S_SERVICES;
+
 	k8s_service_t(const std::string& name, const std::string& uid, const std::string& ns = "");
 
 	const std::string& get_cluster_ip() const;
@@ -332,11 +345,53 @@ private:
 	port_list   m_ports;
 };
 
+
+//
+// event
+//
+
+class k8s_state_t;
+
+class k8s_event_t : public k8s_component
+{
+public:
+	static const k8s_component::type COMPONENT_TYPE = K8S_EVENTS;
+
+	k8s_event_t(const std::string& name, const std::string& uid, const std::string& ns);
+
+	void update(const Json::Value& item, k8s_state_t& state);
+
+	sinsp_user_event get()
+	{
+		return sinsp_user_event(static_cast<uint64_t>(m_epoch_time_s),
+								std::move(m_event_name),
+								std::move(m_description),
+								m_severity,
+								std::move(m_scope),
+								std::move(m_tags));
+	}
+
+private:
+	typedef sinsp_user_event::tag_map_t tag_map_t;
+	typedef sinsp_logger::event_severity severity_t;
+
+	string     m_type;
+	time_t     m_epoch_time_s = 0;
+	string     m_event_name;
+	string     m_component_name;
+	string     m_component_uid;
+	string     m_description;
+	severity_t m_severity;
+	string     m_scope;
+	tag_map_t  m_tags;
+};
+
 typedef std::vector<k8s_ns_t>      k8s_namespaces;
 typedef std::vector<k8s_node_t>    k8s_nodes;
 typedef std::vector<k8s_pod_t>     k8s_pods;
 typedef std::vector<k8s_rc_t>      k8s_controllers;
 typedef std::vector<k8s_service_t> k8s_services;
+typedef std::vector<k8s_event_t>   k8s_events;
 
 //
 // container
