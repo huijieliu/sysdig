@@ -25,7 +25,7 @@ sinsp_user_event::sinsp_user_event() : m_epoch_time_s(0), m_severity(~0)
 }
 
 sinsp_user_event::sinsp_user_event(uint64_t epoch_time_s, string&& name, string&& desc,
-	uint32_t sev, string&& scope, tag_map_t&& tags):
+	string&& scope, tag_map_t&& tags, uint32_t sev):
 	m_epoch_time_s(epoch_time_s), m_name(std::move(name)), m_description(std::move(desc)),
 	m_severity(sev), m_scope(std::move(scope)), m_tags(std::move(tags))
 {
@@ -55,3 +55,39 @@ sinsp_user_event& sinsp_user_event::operator=(sinsp_user_event&& other)
 
 	return *this;
 }
+
+std::string sinsp_user_event::to_string(uint64_t timestamp,
+										std::string&& name,
+										std::string&& description,
+										std::string&& scope,
+										tag_map_t&& tags,
+										uint32_t sev)
+{
+	const std::string from("\"");
+	const std::string to("\\\"");
+
+	std::ostringstream ostr;
+	ostr << "timestamp: " << timestamp << '\n' <<
+			"name: \"" << replace_in_place(name, from, to) << "\"\n"
+			"description: \"" << replace_in_place(description, from, to) << "\"\n"
+			"scope: \"" << replace_in_place(scope, from, to) << "\"\n";
+
+	if(sev != UNKNOWN_SEVERITY)
+	{
+		ostr << "priority: " << sev << '\n';
+	}
+
+	if(tags.size())
+	{
+		ostr << "tags:";
+		for(auto& tag : tags)
+		{
+			ostr << "\n  \"" << replace(tag.first, from, to) << "\": \""
+				<< replace_in_place(tag.second, from, to) << '"';
+		}
+	}
+	ostr << std::flush;
+	g_logger.log(ostr.str(), sinsp_logger::SEV_DEBUG);
+	return ostr.str();
+}
+

@@ -151,14 +151,30 @@ string port_to_string(uint16_t port, uint8_t l4proto, bool resolve);
 ///////////////////////////////////////////////////////////////////////////////
 // String helpers
 ///////////////////////////////////////////////////////////////////////////////
-vector<string> sinsp_split(const string &s, char delim);
+vector<string> sinsp_split(const string& s, char delim);
+
 template<typename It>
-string sinsp_join(It begin, It end, char delim);
-string& ltrim(string &s);
-string& rtrim(string &s);
-string& trim(string &s);
-void replace_in_place(string &s, const string &search, const string &replace);
-void replace_in_place(string& str, string& substr_to_replace, string& new_substr);
+string sinsp_join(It begin, It end, char delim)
+{
+	if(begin == end)
+	{
+		return "";
+	}
+	std::stringstream ss;
+	ss << *begin;
+	++begin;
+	for(auto it = begin; it != end; ++it)
+	{
+		ss << delim << *it;
+	}
+	return ss.str();
+}
+
+string& ltrim(string& s);
+string& rtrim(string& s);
+string& trim(string& s);
+string& replace_in_place(string& s, const string& search, const string& replacement);
+string replace(const string& str, const string& search, const string& replacement);
 
 ///////////////////////////////////////////////////////////////////////////////
 // number parser

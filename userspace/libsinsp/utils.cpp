@@ -965,14 +965,14 @@ string ipv6tuple_to_string(_ipv6tuple* tuple, bool resolve)
 //
 vector<string> sinsp_split(const string &s, char delim)
 {
-    vector<string> res;
-    istringstream f(s);
-    string ts;
+	vector<string> res;
+	istringstream f(s);
+	string ts;
 
-    while(getline(f, ts, delim)) 
+	while(getline(f, ts, delim))
 	{
-        res.push_back(ts);
-    }
+		res.push_back(ts);
+	}
 
 	return res;
 }
@@ -1003,33 +1003,25 @@ string& trim(string &s)
 	return ltrim(rtrim(s));
 }
 
-void replace_in_place(string &s, const string &search, const string &replace)
+string& replace_in_place(string& str, const string& search, const string& replacement)
 {
-	for(size_t pos = 0; ; pos += replace.length()) 
+	string::size_type ssz = search.length();
+	string::size_type rsz = replacement.length();
+	string::size_type pos = 0;
+	while((pos = str.find(search, pos)) != string::npos)
 	{
-		// Locate the substring to replace
-		pos = s.find(search, pos);
-		if(pos == string::npos ) break;
-		// Replace by erasing and inserting
-		s.erase(pos, search.length());
-		s.insert(pos, replace );
+		str.replace(pos, ssz, replacement);
+		pos += rsz;
+		ASSERT(pos <= str.length());
 	}
+	return str;
 }
 
-void replace_in_place(string& str, string& substr_to_replace, string& new_substr) 
+string replace(const string& str, const string& search, const string& replacement)
 {
-	size_t index = 0;
-	uint32_t nsize = (uint32_t)substr_to_replace.size();
-
-	while (true) 
-	{
-		 index = str.find(substr_to_replace, index);
-		 if (index == string::npos) break;
-
-		 str.replace(index, nsize, new_substr);
-
-		 index += nsize;
-	}
+	string s(str);
+	replace_in_place(s, search, replacement);
+	return s;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

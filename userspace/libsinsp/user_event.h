@@ -28,6 +28,7 @@ class sinsp_user_event
 {
 public:
 	typedef std::unordered_map<std::string, std::string> tag_map_t;
+	static const uint32_t UNKNOWN_SEVERITY = static_cast<uint32_t>(~0);
 
 	sinsp_user_event(const sinsp_user_event&) = delete;
 	sinsp_user_event& operator=(const sinsp_user_event& other) = delete;
@@ -35,7 +36,7 @@ public:
 	sinsp_user_event();
 
 	sinsp_user_event(uint64_t epoch_time_s, string&& name, string&& desc,
-		uint32_t sev, string&& scope, tag_map_t&& tags);
+		string&& scope, tag_map_t&& tags, uint32_t sev);
 
 	sinsp_user_event(sinsp_user_event&& other);
 
@@ -47,6 +48,13 @@ public:
 	uint32_t severity() const;
 	const string& scope() const;
 	const tag_map_t& tags() const;
+
+	static std::string to_string(uint64_t timestamp,
+								std::string&& name,
+								std::string&& description,
+								std::string&& scope,
+								tag_map_t&& tags,
+								uint32_t sev = UNKNOWN_SEVERITY);
 
 private:
 	uint64_t  m_epoch_time_s;

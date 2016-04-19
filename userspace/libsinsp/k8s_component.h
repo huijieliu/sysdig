@@ -361,29 +361,9 @@ public:
 
 	void update(const Json::Value& item, k8s_state_t& state);
 
-	sinsp_user_event get()
-	{
-		return sinsp_user_event(static_cast<uint64_t>(m_epoch_time_s),
-								std::move(m_event_name),
-								std::move(m_description),
-								m_severity,
-								std::move(m_scope),
-								std::move(m_tags));
-	}
-
 private:
 	typedef sinsp_user_event::tag_map_t tag_map_t;
 	typedef sinsp_logger::event_severity severity_t;
-
-	string     m_type;
-	time_t     m_epoch_time_s = 0;
-	string     m_event_name;
-	string     m_component_name;
-	string     m_component_uid;
-	string     m_description;
-	severity_t m_severity;
-	string     m_scope;
-	tag_map_t  m_tags;
 };
 
 typedef std::vector<k8s_ns_t>      k8s_namespaces;

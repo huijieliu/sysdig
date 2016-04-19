@@ -30,7 +30,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 ///////////////////////////////////////////////////////////////////////////////
 sinsp_logger::sinsp_logger()
 {
-	m_file = NULL;	
+	m_file = NULL;
 	m_flags = OT_NONE;
 	m_sev = SEV_INFO;
 	m_callback = NULL;
@@ -53,7 +53,7 @@ void sinsp_logger::set_log_output_type(sinsp_logger::output_type log_output_type
 	}
 	else if(log_output_type == sinsp_logger::OT_STDERR)
 	{
-		add_file_log("sisnsp.log");
+		add_file_log("sinsp.log");
 	}
 	else if(log_output_type == sinsp_logger::OT_NONE)
 	{
@@ -115,8 +115,7 @@ void sinsp_logger::log(string msg, event_severity sev)
 {
 	if(is_callback())
 	{
-		snprintf(m_tbuf, sizeof(m_tbuf), "%s", msg.c_str());
-		(*m_callback)(m_tbuf, (uint32_t)sev);
+		(*m_callback)(std::move(msg), (uint32_t)sev);
 	}
 }
 
@@ -136,37 +135,33 @@ void sinsp_logger::log(string msg, severity sev)
 		gettimeofday(&ts, NULL);
 		time_t rawtime = (time_t)ts.tv_sec;
 		struct tm* time_info = gmtime(&rawtime);
-		snprintf(m_tbuf, sizeof(m_tbuf), "%.2d-%.2d %.2d:%.2d:%.2d.%.6d %s",
+		snprintf(m_tbuf, sizeof(m_tbuf), "%.2d-%.2d %.2d:%.2d:%.2d.%.6d ",
 			time_info->tm_mon + 1,
 			time_info->tm_mday,
 			time_info->tm_hour,
 			time_info->tm_min,
 			time_info->tm_sec,
-			(int)ts.tv_usec,
-			msg.c_str());
-	}
-	else
-	{
-		snprintf(m_tbuf, sizeof(m_tbuf), "%s", msg.c_str());
+			(int)ts.tv_usec);
+		msg.insert(0, m_tbuf, 22);
 	}
 
 	if(is_callback())
 	{
-		(*m_callback)(m_tbuf, (uint32_t)sev);
+		(*m_callback)(std::move(msg), (uint32_t)sev);
 	}
 	else if(m_flags & sinsp_logger::OT_FILE)
 	{
-		fprintf(m_file, "%s\n", m_tbuf);
+		fprintf(m_file, "%s\n", msg.c_str());
 		fflush(m_file);
 	}
 	else if(m_flags & sinsp_logger::OT_STDOUT)
 	{
-		fprintf(stdout, "%s\n", m_tbuf);
+		fprintf(stdout, "%s\n", msg.c_str());
 		fflush(stdout);
 	}
 	else if(m_flags & sinsp_logger::OT_STDERR)
 	{
-		fprintf(stderr, "%s\n", m_tbuf);
+		fprintf(stderr, "%s\n", msg.c_str());
 		fflush(stderr);
 	}
 }

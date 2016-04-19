@@ -21,7 +21,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 ///////////////////////////////////////////////////////////////////////////////
 // The logger class
 ///////////////////////////////////////////////////////////////////////////////
-typedef void (*sinsp_logger_callback)(char* str, uint32_t sev);
+typedef void (*sinsp_logger_callback)(std::string&& str, uint32_t sev);
 
 class SINSP_PUBLIC sinsp_logger
 {
@@ -74,7 +74,8 @@ public:
 
 	void log(string msg, severity sev=SEV_INFO);
 	void log(string msg, event_severity sev);
-	// Log functions that accepts printf syntax and return the formatted buffer.
+
+	// Log functions that accept printf syntax and return the formatted buffer.
 	char* format(severity sev, const char* fmt, ...);
 	char* format(const char* fmt, ...);
 
