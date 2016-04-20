@@ -87,7 +87,7 @@ void sinsp_logger::add_file_log(string filename)
 	m_file = fopen(filename.c_str(), "w");
 	if(!m_file)
 	{
-		throw sinsp_exception("unable to open file " + filename + " for wrirting");
+		throw sinsp_exception("unable to open file " + filename + " for writing");
 	}
 
 	m_flags |= sinsp_logger::OT_FILE;
@@ -97,8 +97,13 @@ void sinsp_logger::add_callback_log(sinsp_logger_callback callback)
 {
 	ASSERT(m_callback == NULL);
 	m_callback = callback;
-
 	m_flags |= sinsp_logger::OT_CALLBACK;
+}
+
+void sinsp_logger::remove_callback_log()
+{
+	m_callback = 0;
+	m_flags &= ~sinsp_logger::OT_CALLBACK;
 }
 
 void sinsp_logger::set_severity(severity sev)
@@ -145,11 +150,11 @@ void sinsp_logger::log(string msg, severity sev)
 		msg.insert(0, m_tbuf, 22);
 	}
 
-	if(is_callback())
+	if(is_callback() && m_callback)
 	{
 		(*m_callback)(std::move(msg), (uint32_t)sev);
 	}
-	else if(m_flags & sinsp_logger::OT_FILE)
+	else if((m_flags & sinsp_logger::OT_FILE) && m_file)
 	{
 		fprintf(m_file, "%s\n", msg.c_str());
 		fflush(m_file);

@@ -69,6 +69,7 @@ public:
 	void add_file_log(string filename);
 	void add_file_log(FILE* f);
 	void add_callback_log(sinsp_logger_callback callback);
+	void remove_callback_log();
 
 	void set_severity(severity sev);
 

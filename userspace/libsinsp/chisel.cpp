@@ -17,6 +17,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <cctype>
 #include <locale>
