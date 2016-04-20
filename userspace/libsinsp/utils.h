@@ -20,6 +20,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <algorithm>
 #include <locale>
+#include <sstream>
 
 class sinsp_evttables;
 typedef union _sinsp_sockinfo sinsp_sockinfo;
