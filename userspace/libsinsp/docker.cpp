@@ -12,8 +12,7 @@ docker::docker(const std::string& url,
 	const std::string& http_version,
 	int timeout_ms,
 	bool is_captured,
-	bool verbose):
-		m_id("docker"),
+	bool verbose): m_id("docker"),
 #ifdef HAS_CAPTURE
 		m_url(!url.empty() ? url : std::string(scap_get_host_root()) + "/var/run/docker.sock"),
 		m_collector(false),
@@ -171,7 +170,8 @@ void docker::handle_event(Json::Value&& root)
 	{
 		epoch_time_s = t.asUInt64();
 	}
-	g_logger.log("Docker event: name=" + event_name + ", id=" + id + ", status=" + status + ", time=" + std::to_string(epoch_time_s),
+	g_logger.log("Docker event: name=" + event_name + ", id=" + id +
+				", status=" + status + ", time=" + std::to_string(epoch_time_s),
 				sinsp_logger::SEV_DEBUG);
 	if(m_verbose)
 	{
@@ -183,9 +183,8 @@ void docker::handle_event(Json::Value&& root)
 
 	sinsp_user_event::tag_map_t tags;
 	tags["sysdig_event_source"] = "docker";
-	std::string evt = sinsp_user_event::to_string(epoch_time_s, std::move(event_name), std::move(status),
-											std::move(scope), std::move(tags));
-	g_logger.log(evt/*sinsp_user_event::to_string(epoch_time_s, std::move(event_name), std::move(status),
-											std::move(scope), std::move(tags))*/, severity);
-	g_logger.log(evt, sinsp_logger::SEV_DEBUG);
+	std::string evt = sinsp_user_event::to_string(epoch_time_s, std::move(event_name),
+						std::move(status), std::move(scope), std::move(tags));
+	g_logger.log(std::move(evt), severity);
+	//g_logger.log(evt, sinsp_logger::SEV_DEBUG);
 }

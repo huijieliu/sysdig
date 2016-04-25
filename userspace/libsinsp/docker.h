@@ -20,7 +20,7 @@ public:
 	static const int default_timeout_ms = 1000L;
 
 	docker(const std::string& url = "",
-		const std::string& path = "/events?since=1374067924",
+		const std::string& path = "/events",
 		const std::string& http_version = "1.0",
 		int timeout_ms = default_timeout_ms,
 		bool is_captured = false,

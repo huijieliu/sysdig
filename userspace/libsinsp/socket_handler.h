@@ -35,7 +35,6 @@ public:
 	static const std::string HTTP_VERSION_11;
 
 	socket_data_handler(T& obj, const std::string& id, const std::string& url, const std::string& path = "", const std::string& http_version = HTTP_VERSION_11, int timeout_ms = 5000L):
-
 		m_obj(obj),
 		m_id(id),
 		m_url(url),
