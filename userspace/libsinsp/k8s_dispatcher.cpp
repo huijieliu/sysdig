@@ -475,20 +475,15 @@ void k8s_dispatcher::handle_service(const Json::Value& root, const msg_data& dat
 
 void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
 {
-	//g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
-
-	if(data.m_reason == COMPONENT_ADDED)
+	const Json::Value& object = root["object"];
+	if(!object.isNull())
 	{
-		const Json::Value& object = root["object"];
-		if(!object.isNull())
-		{
-			k8s_event_t& evt = m_state.add_component<k8s_events, k8s_event_t>(m_state.get_events(), data.m_name, data.m_uid, data.m_namespace);
-			m_state.update_event(evt, object);
-		}
+		k8s_event_t& evt = m_state.add_component<k8s_events, k8s_event_t>(m_state.get_events(), data.m_name, data.m_uid, data.m_namespace);
+		m_state.update_event(evt, object);
 	}
-	else
 	{
-		g_logger.log(std::string("Unsupported K8S EVENT reason: ") + std::to_string(data.m_reason), sinsp_logger::SEV_ERROR);
+		g_logger.log("K8S EVENT: object not found. ", sinsp_logger::SEV_ERROR);
+		g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
 	}
 }
 
@@ -540,12 +535,6 @@ void k8s_dispatcher::extract_data(const std::string& json, bool enqueue)
 			os << data.m_name << ',' << data.m_uid << ',' << data.m_namespace << ']';
 			g_logger.log(os.str(), sinsp_logger::SEV_INFO);
 			//g_logger.log(root.toStyledString(), sinsp_logger::SEV_DEBUG);
-			std::ostringstream lostr;
-			/*lostr << "name: \"K8s Dispatcher\"\n"
-					"description: \"" << os.str() << "\"\n"
-					"scope: \"kubernetes.namespace.name: " << data.m_namespace << "\"\n"
-					"tags:\n  key1: \"val1\"\n  key2: \"val2\"" << std::flush;
-			g_logger.log(lostr.str(), sinsp_logger::SEV_EVT_INFORMATION);*/
 			{
 				m_state.update_cache(m_type);
 #ifdef HAS_CAPTURE

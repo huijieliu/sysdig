@@ -691,12 +691,14 @@ void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
 				scope.append(" and kubernetes.namespace.name=").append(ns);
 			}
 
+			tags["sysdig_event_source"] = "kubernetes";
+			/* no labels for now
 			for(const auto& label : comp->get_labels())
 			{
 				tags[label.first] = label.second;
 				g_logger.log("EVENT label: [" + label.first + ':' + label.second + ']', sinsp_logger::SEV_DEBUG);
 				scope.append(" and kubernetes.").append(t).append(".label.").append(label.first).append(1, '=').append(label.second);
-			}
+			}*/
 		}
 		else
 		{
