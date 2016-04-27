@@ -248,7 +248,16 @@ void mesos_http::discover_framework_uris(const Json::Value& frameworks)
 						{
 							g_logger.log(std::string("Found Marathon framework ").append(name).append(" (").append(id).append(") at [").append(framework_url).append(1, ']'),
 										 sinsp_logger::SEV_INFO);
-							m_marathon_uris.emplace_back(framework_url);
+							// TODO: support multiple marathon frameworks
+							if(!m_marathon_uris.size())
+							{
+								m_marathon_uris.emplace_back(get_framework_url(framework));
+							}
+							else
+							{
+								g_logger.log("Multiple marathon URIs discovered; only the first one (" + m_marathon_uris[0] + ") will have effect;"
+									" others will be treated as generic frameworks.", sinsp_logger::SEV_WARNING);
+							}
 						}
 						else
 						{

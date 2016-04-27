@@ -38,6 +38,7 @@ mesos::mesos(const std::string& state_uri,
 #endif // HAS_CAPTURE
 		m_state(is_captured, verbose),
 		m_discover_mesos_leader(discover_mesos_leader),
+		m_discover_marathon_uris(marathon_uris.empty()),
 		m_timeout_ms(timeout_ms),
 		m_verbose(verbose)
 {
@@ -48,6 +49,15 @@ mesos::mesos(const std::string& state_uri,
 							(m_discover_mesos_leader ? "true" : "false"),
 				 sinsp_logger::SEV_DEBUG);
 #endif
+	// TODO: support multiple marathon frameworks
+	if(m_marathon_uris.size() > 1)
+	{
+		std::string marathon_uri = m_marathon_uris[0];
+		m_marathon_uris.clear();
+		m_marathon_uris.emplace_back(marathon_uri);
+		g_logger.log("Multiple marathon URIs specified; only the first one (" + marathon_uri + ") will have effect;"
+					" others will be treated as generic frameworks.", sinsp_logger::SEV_WARNING);
+	}
 	init();
 }
 
@@ -702,11 +712,11 @@ void mesos::set_state_json(json_ptr_t json, const std::string&)
 	}
 }
 
-void mesos::parse_state(Json::Value&& root, bool discover_uris)
+void mesos::parse_state(Json::Value&& root)
 {
 	clear_mesos();
 #ifdef HAS_CAPTURE
-	if(discover_uris && !has_marathon())
+	if(m_discover_marathon_uris && !has_marathon())
 	{
 		m_state_http->discover_framework_uris(root["frameworks"]);
 		if(has_marathon())
@@ -787,7 +797,8 @@ void mesos::simulate_event(const std::string& json)
 		{
 			if(member == "mesos_state")
 			{
-				parse_state(std::move(root[member]), false);
+				m_discover_marathon_uris = false;
+				parse_state(std::move(root[member]));
 			}
 			else if(member == "marathon_groups")
 			{
