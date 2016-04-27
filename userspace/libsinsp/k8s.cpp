@@ -25,15 +25,29 @@ const k8s_component::type_map k8s::m_components =
 
 k8s::dispatch_map k8s::make_dispatch_map(k8s_state_t& state)
 {
-	return dispatch_map
+	if(m_event_filter)
 	{
-		{ k8s_component::K8S_NODES,                  new k8s_dispatcher(k8s_component::K8S_NODES,                  state)},
-		{ k8s_component::K8S_NAMESPACES,             new k8s_dispatcher(k8s_component::K8S_NAMESPACES,             state)},
-		{ k8s_component::K8S_PODS,                   new k8s_dispatcher(k8s_component::K8S_PODS,                   state)},
-		{ k8s_component::K8S_REPLICATIONCONTROLLERS, new k8s_dispatcher(k8s_component::K8S_REPLICATIONCONTROLLERS, state)},
-		{ k8s_component::K8S_SERVICES,               new k8s_dispatcher(k8s_component::K8S_SERVICES,               state)},
-		{ k8s_component::K8S_EVENTS,                 new k8s_dispatcher(k8s_component::K8S_EVENTS,                 state)}
-	};
+		return dispatch_map
+		{
+			{ k8s_component::K8S_NODES,                  new k8s_dispatcher(k8s_component::K8S_NODES,                  state) },
+			{ k8s_component::K8S_NAMESPACES,             new k8s_dispatcher(k8s_component::K8S_NAMESPACES,             state) },
+			{ k8s_component::K8S_PODS,                   new k8s_dispatcher(k8s_component::K8S_PODS,                   state) },
+			{ k8s_component::K8S_REPLICATIONCONTROLLERS, new k8s_dispatcher(k8s_component::K8S_REPLICATIONCONTROLLERS, state) },
+			{ k8s_component::K8S_SERVICES,               new k8s_dispatcher(k8s_component::K8S_SERVICES,               state) },
+			{ k8s_component::K8S_EVENTS,                 new k8s_dispatcher(k8s_component::K8S_EVENTS,                 state, m_event_filter) }
+		};
+	}
+	else
+	{
+		return dispatch_map
+		{
+			{ k8s_component::K8S_NODES,                  new k8s_dispatcher(k8s_component::K8S_NODES,                  state) },
+			{ k8s_component::K8S_NAMESPACES,             new k8s_dispatcher(k8s_component::K8S_NAMESPACES,             state) },
+			{ k8s_component::K8S_PODS,                   new k8s_dispatcher(k8s_component::K8S_PODS,                   state) },
+			{ k8s_component::K8S_REPLICATIONCONTROLLERS, new k8s_dispatcher(k8s_component::K8S_REPLICATIONCONTROLLERS, state) },
+			{ k8s_component::K8S_SERVICES,               new k8s_dispatcher(k8s_component::K8S_SERVICES,               state) }
+		};
+	}
 }
 
 k8s::k8s(const std::string& uri, bool start_watch, bool watch_in_thread, bool is_captured,
@@ -41,9 +55,11 @@ k8s::k8s(const std::string& uri, bool start_watch, bool watch_in_thread, bool is
 #ifdef HAS_CAPTURE
 		ssl_ptr_t ssl, bt_ptr_t bt,
 #endif // HAS_CAPTURE
-		bool curl_debug) :
+		bool curl_debug,
+		event_filter_ptr_t event_filter) :
 		m_watch(uri.empty() ? false : start_watch),
 		m_state(is_captured),
+		m_event_filter(/*event_filter*/new event_filter_t{ { "pod", {"*"} } }),
 		m_dispatch(std::move(make_dispatch_map(m_state))),
 		m_watch_in_thread(watch_in_thread)
 #ifdef HAS_CAPTURE
@@ -342,11 +358,12 @@ void k8s::extract_data(Json::Value& items, k8s_component::type component, const 
 				}
 
 			case k8s_component::K8S_EVENTS:
+				if(m_event_filter)
 				{
 					k8s_events& evts = m_state.get_events();
 					if(evts.size())
 					{
-						component_kind = "EventList";
+						component_kind = "Event";
 						component_name = evts.back().get_name();
 						component_uid = evts.back().get_uid();
 						component_ns = evts.back().get_namespace();
@@ -359,9 +376,12 @@ void k8s::extract_data(Json::Value& items, k8s_component::type component, const 
 			default: break;
 			}
 			os.str("");
-			os << '[' << event_type << ',' << component_kind << ',' << 
-						component_name << ',' << component_uid << ',' << component_ns << ']';
-			g_logger.log(os.str(), sinsp_logger::SEV_INFO);
+			if(!component_kind.empty())
+			{
+				os << '[' << event_type << ',' << component_kind << ',' <<
+							component_name << ',' << component_uid << ',' << component_ns << ']';
+				g_logger.log(os.str(), sinsp_logger::SEV_INFO);
+			}
 #ifdef HAS_CAPTURE
 			ASSERT(!component_kind.empty());
 			item["apiVersion"] = api_version;

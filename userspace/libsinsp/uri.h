@@ -51,9 +51,9 @@ private:
 	std::string extract_query(std::string& str);
 	std::string extract_password(std::string& userpass);
 	std::string extract_auth(std::string& str);
-	
+
 	std::string m_scheme, m_user, m_password, m_host, m_path, m_query;
-    int m_port;
+	int m_port;
 };
 
 inline const std::string& uri::get_scheme() const

@@ -288,3 +288,8 @@ int ci_find_substr(const T& str1, const T& str2, const std::locale& loc = std::l
 	if(it != str1.end()) { return it - str1.begin(); }
 	return -1;
 }
+
+struct ci_compare
+{
+	bool operator() (const std::string& a, const std::string& b) const;
+};

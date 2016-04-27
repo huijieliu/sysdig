@@ -12,14 +12,16 @@ docker::docker(const std::string& url,
 	const std::string& http_version,
 	int timeout_ms,
 	bool is_captured,
-	bool verbose): m_id("docker"),
+	bool verbose,
+	event_filter_ptr_t event_filter): m_id("docker"),
 #ifdef HAS_CAPTURE
 		m_url(!url.empty() ? url : std::string(scap_get_host_root()) + "/var/run/docker.sock"),
 		m_collector(false),
 #endif // HAS_CAPTURE
 		m_timeout_ms(timeout_ms),
 		m_is_captured(is_captured),
-		m_verbose(verbose)
+		m_verbose(verbose),
+		m_event_filter(event_filter/*new event_filter_t{"*"}*/)
 {
 #ifdef HAS_CAPTURE
 	g_logger.log(std::string("Creating Docker object for " +
@@ -151,40 +153,66 @@ void docker::collect_data()
 
 void docker::set_event_json(json_ptr_t json, const std::string&)
 {
-	m_events.emplace_back(json);
+	if(m_event_filter)
+	{
+		m_events.emplace_back(json);
+	}
 }
 
 void docker::handle_event(Json::Value&& root)
 {
-	severity_t severity;
-	std::string event_name = get_json_string(root, "from");
-	std::string id = get_json_string(root, "id");
-	if(id.length() >= 12) { id = id.substr(0, 12); }
-	std::string status = get_json_string(root, "status");
-	severity_map_t::const_iterator it = m_severity_map.find(status);
-	severity = (it != m_severity_map.end()) ? it->second : sinsp_logger::SEV_EVT_ERROR;
-
-	uint64_t epoch_time_s = static_cast<uint64_t>(~0);
-	Json::Value t = root["time"];
-	if(!t.isNull() && t.isConvertibleTo(Json::uintValue))
+	if(m_event_filter)
 	{
-		epoch_time_s = t.asUInt64();
-	}
-	g_logger.log("Docker event: name=" + event_name + ", id=" + id +
-				", status=" + status + ", time=" + std::to_string(epoch_time_s),
-				sinsp_logger::SEV_DEBUG);
-	if(m_verbose)
-	{
-		std::cout << Json::FastWriter().write(root) << std::endl;
-	}
+		std::string status = get_json_string(root, "status");
+		if(!status.empty())
+		{
+			if(m_event_filter->find("*") != m_event_filter->end() ||
+				m_event_filter->find(status) != m_event_filter->end())
+			{
+				severity_map_t::const_iterator it = m_severity_map.find(status);
+				if(it == m_severity_map.end())
+				{
+					severity_t severity;
+					std::string event_name = get_json_string(root, "from");
+					std::string id = get_json_string(root, "id");
+					if(id.length() >= 12) { id = id.substr(0, 12); }
+					severity = (it != m_severity_map.end()) ? it->second : sinsp_logger::SEV_EVT_ERROR;
 
-	std::string scope("container.id=");
-	scope.append(id);
+					uint64_t epoch_time_s = static_cast<uint64_t>(~0);
+					Json::Value t = root["time"];
+					if(!t.isNull() && t.isConvertibleTo(Json::uintValue))
+					{
+						epoch_time_s = t.asUInt64();
+					}
+					g_logger.log("Docker event: name=" + event_name + ", id=" + id +
+								", status=" + status + ", time=" + std::to_string(epoch_time_s),
+								sinsp_logger::SEV_DEBUG);
+					if(m_verbose)
+					{
+						std::cout << Json::FastWriter().write(root) << std::endl;
+					}
 
-	sinsp_user_event::tag_map_t tags;
-	tags["sysdig_event_source"] = "docker";
-	std::string evt = sinsp_user_event::to_string(epoch_time_s, std::move(event_name),
-						std::move(status), std::move(scope), std::move(tags));
-	g_logger.log(std::move(evt), severity);
-	//g_logger.log(evt, sinsp_logger::SEV_DEBUG);
+					std::string scope("container.id=");
+					scope.append(id);
+
+					sinsp_user_event::tag_map_t tags;
+					tags["sysdig_event_source"] = "docker";
+					std::string evt = sinsp_user_event::to_string(epoch_time_s, std::move(event_name),
+										std::move(status), std::move(scope), std::move(tags));
+					g_logger.log(std::move(evt), severity);
+					//g_logger.log(evt, sinsp_logger::SEV_DEBUG);
+				}
+				else
+				{
+					g_logger.log("Docker EVENT: status not supported: " + status, sinsp_logger::SEV_ERROR);
+					g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+				}
+			}
+		}
+		else
+		{
+			g_logger.log("Docker EVENT: status not found in JSON.", sinsp_logger::SEV_ERROR);
+			g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+		}
+	}
 }

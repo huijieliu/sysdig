@@ -16,15 +16,18 @@ class docker
 public:
 	typedef std::vector<std::string> uri_list_t;
 	typedef std::shared_ptr<Json::Value> json_ptr_t;
+	typedef std::set<std::string, ci_compare> event_filter_t;
+	typedef std::shared_ptr<event_filter_t> event_filter_ptr_t;
 
 	static const int default_timeout_ms = 1000L;
 
 	docker(const std::string& url = "",
-		const std::string& path = "/events",
+		const std::string& path = "/events?since=0",
 		const std::string& http_version = "1.0",
 		int timeout_ms = default_timeout_ms,
 		bool is_captured = false,
-		bool verbose = false);
+		bool verbose = false,
+		event_filter_ptr_t event_filter = nullptr);
 
 	~docker();
 
@@ -80,9 +83,10 @@ private:
 
 private:
 
-	long m_timeout_ms;
-	bool m_is_captured;
-	bool m_verbose;
+	long               m_timeout_ms;
+	bool               m_is_captured;
+	bool               m_verbose;
+	event_filter_ptr_t m_event_filter;
 
 	typedef std::vector<json_ptr_t> event_list_t;
 	typedef sinsp_logger::event_severity severity_t;
