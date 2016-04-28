@@ -19,7 +19,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-mesos_http::mesos_http(mesos& m, const uri& url, bool discover, int timeout_ms):
+mesos_http::mesos_http(mesos& m, const uri& url, bool discover_mesos_lead_master, bool discover_marathon, int timeout_ms):
 	m_sync_curl(curl_easy_init()),
 	m_select_curl(curl_easy_init()),
 	m_mesos(m),
@@ -31,7 +31,8 @@ mesos_http::mesos_http(mesos& m, const uri& url, bool discover, int timeout_ms):
 	m_curl_version(curl_version_info(CURLVERSION_NOW)),
 	m_request(make_request(url, m_curl_version)),
 	m_is_mesos_state(url.to_string().find(mesos::default_state_api) != std::string::npos),
-	m_discover_lead_master(discover)
+	m_discover_lead_master(discover_mesos_lead_master),
+	m_discover_marathon(discover_marathon)
 {
 	if(!m_sync_curl || !m_select_curl)
 	{
@@ -244,24 +245,27 @@ void mesos_http::discover_framework_uris(const Json::Value& frameworks)
 					std::string framework_url = get_framework_url(framework);
 					if(!framework_url.empty())
 					{
-						if(mesos_framework::is_marathon(name))
+						if(m_discover_marathon)
 						{
-							g_logger.log(std::string("Found Marathon framework ").append(name).append(" (").append(id).append(") at [").append(framework_url).append(1, ']'),
-										 sinsp_logger::SEV_INFO);
-							// TODO: support multiple marathon frameworks
-							if(!m_marathon_uris.size())
+							if(mesos_framework::is_marathon(name))
 							{
-								m_marathon_uris.emplace_back(get_framework_url(framework));
+								g_logger.log(std::string("Found Marathon framework ").append(name).append(" (").append(id).append(") at [").append(framework_url).append(1, ']'),
+											 sinsp_logger::SEV_INFO);
+								// TODO: support multiple marathon frameworks
+								if(!m_marathon_uris.size())
+								{
+									m_marathon_uris.emplace_back(get_framework_url(framework));
+								}
+								else
+								{
+									g_logger.log("Multiple marathon URIs discovered; only the first one (" + m_marathon_uris[0] + ") will have effect;"
+										" others will be treated as generic frameworks.", sinsp_logger::SEV_WARNING);
+								}
 							}
 							else
 							{
-								g_logger.log("Multiple marathon URIs discovered; only the first one (" + m_marathon_uris[0] + ") will have effect;"
-									" others will be treated as generic frameworks.", sinsp_logger::SEV_WARNING);
+								g_logger.log(std::string("Skipping non-Marathon framework URL detection ").append(name).append(" (").append(id).append(1, ')'), sinsp_logger::SEV_DEBUG);
 							}
-						}
-						else
-						{
-							g_logger.log(std::string("Skipping non-Marathon framework URL detection ").append(name).append(" (").append(id).append(1, ')'), sinsp_logger::SEV_DEBUG);
 						}
 					}
 					else

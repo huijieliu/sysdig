@@ -76,7 +76,7 @@ void mesos::init()
 			throw sinsp_exception("Invalid access to Mesos initializer: mesos state http client for [" +
 								 m_mesos_uri + "] not unique.");
 		}
-		m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, m_timeout_ms);
+		m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, false, m_timeout_ms);
 		rebuild_mesos_state(true);
 		init_marathon();
 	}
@@ -91,11 +91,12 @@ void mesos::init_marathon()
 		m_marathon_groups_http.clear();
 		m_marathon_apps_http.clear();
 
-		const uri_list_t& marathons = m_marathon_uris.size() ? m_marathon_uris : m_state_http->get_marathon_uris();
+		bool discover_marathon = m_marathon_uris.size() == 0;
+		const uri_list_t& marathons = discover_marathon ? m_state_http->get_marathon_uris() : m_marathon_uris;
 		for(const auto& muri : marathons)
 		{
-			m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, m_timeout_ms);
-			m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, m_timeout_ms);
+			m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, discover_marathon, m_timeout_ms);
+			m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, discover_marathon, m_timeout_ms);
 		}
 
 		if(has_marathon())
