@@ -20,6 +20,142 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <memory>
 #include <mutex>
+#include <algorithm>
+
+//
+// user-configured event meta
+//
+class user_event_meta_t
+{
+public:
+	typedef std::set<std::string, ci_compare> type_list_t;
+
+	static const std::string PERMIT_ALL;
+	//static const std::string PERMIT_NONE;
+
+	user_event_meta_t() {};
+
+	user_event_meta_t(const std::string& kind, const type_list_t& types);
+	user_event_meta_t(std::string&& kind, type_list_t&& types);
+	user_event_meta_t(const user_event_meta_t& other);
+	user_event_meta_t(user_event_meta_t&& other);
+
+	user_event_meta_t& operator = (const user_event_meta_t& other);
+	user_event_meta_t& operator = (user_event_meta_t&& other);
+	bool operator < (const user_event_meta_t& other) const;
+
+	const std::string& kind() const;
+	const type_list_t& types() const;
+	bool has_type(const std::string& type) const;
+	bool any_type() const;
+	bool is_kind(const std::string& kind) const;
+	bool any_kind() const;
+
+private:
+	std::string m_kind;
+	type_list_t m_types;
+};
+
+inline bool user_event_meta_t::operator < (const user_event_meta_t& other) const
+{
+	return strcasecmp(m_kind.c_str(), other.m_kind.c_str()) < 0;
+}
+
+inline const std::string& user_event_meta_t::kind() const
+{
+	return m_kind;
+}
+
+inline const user_event_meta_t::type_list_t& user_event_meta_t::types() const
+{
+	return m_types;
+}
+
+inline bool user_event_meta_t::has_type(const std::string& type) const
+{
+	return m_types.find(type) != m_types.end() || any_type();
+}
+
+inline bool user_event_meta_t::any_type() const
+{
+	return m_types.find(PERMIT_ALL) != m_types.end();
+}
+
+inline bool user_event_meta_t::is_kind(const std::string& kind) const
+{
+	return (strcasecmp(m_kind.c_str(), kind.c_str()) == 0) || any_kind();
+}
+
+inline bool user_event_meta_t::any_kind() const
+{
+	return strcasecmp(m_kind.c_str(), PERMIT_ALL.c_str()) == 0;
+}
+
+
+//
+// user-configured-event filter
+//
+class user_event_filter_t
+{
+public:
+	typedef std::set<user_event_meta_t> list_t;
+	typedef std::shared_ptr<user_event_filter_t> ptr_t;
+
+	user_event_filter_t();
+	user_event_filter_t(const list_t& list);
+	user_event_filter_t(list_t&& list);
+
+	void add(const user_event_meta_t& evt);
+	void add(user_event_meta_t&& evt);
+	bool has(const std::string& evt_kind) const;
+	bool has(const std::string& evt_kind, const std::string& evt_type) const;
+	list_t::const_iterator get(const std::string& evt_kind) const;
+	void remove(const user_event_meta_t& evt);
+	void remove(const std::string& kind);
+	void clear();
+	bool allows(const user_event_meta_t& evt) const;
+	bool allows_all(const std::string& kind) const;
+	bool allows_all() const;
+
+	std::string to_string() const;
+
+private:
+	static bool ci_compare_str(const std::string& a, const std::string& b);
+
+	// if the filter entry of the requested kind is found, returns const iterator pointing to it;
+	// if "any event" entry is found, iterator pointing to it is returned; otherwise, the iterator
+	// pointing to the end of the filter list is returned (indicating the event kind was not found)
+	list_t::const_iterator get_meta(const std::string& evt_kind) const;
+
+	bool handle_all(user_event_meta_t&& evt);
+
+	list_t m_list;
+};
+
+inline void user_event_filter_t::clear()
+{
+	m_list.clear();
+}
+
+inline bool user_event_filter_t::ci_compare_str(const std::string& a, const std::string& b)
+{
+	return strcasecmp(a.c_str(), b.c_str()) == 0;
+}
+
+inline bool user_event_filter_t::has(const std::string& evt_kind) const
+{
+	return get(evt_kind) != m_list.end();
+}
+
+inline bool user_event_filter_t:: allows_all(const std::string& kind) const
+{
+	return allows(user_event_meta_t(kind, {user_event_meta_t::PERMIT_ALL}));
+}
+
+inline bool user_event_filter_t::allows_all() const
+{
+	return get(user_event_meta_t::PERMIT_ALL) != m_list.end();
+}
 
 //
 // Wrapper class for user-configured events

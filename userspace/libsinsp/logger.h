@@ -26,28 +26,34 @@ typedef void (*sinsp_logger_callback)(std::string&& str, uint32_t sev);
 class SINSP_PUBLIC sinsp_logger
 {
 public:
+	static const uint32_t SEVERITY_NONE = (uint32_t)-1;
+
 	enum severity
 	{
-		SEV_DEBUG = 0,
-		SEV_INFO = 1,
-		SEV_WARNING = 2,
+		SEV_FATAL = 1,
+		SEV_CRITICAL = 2,
 		SEV_ERROR = 3,
-		SEV_CRITICAL = 4,
-		SEV_MAX = SEV_CRITICAL,
+		SEV_WARNING = 4,
+		SEV_NOTICE = 5,
+		SEV_INFO = 6,
+		SEV_DEBUG = 7,
+		SEV_TRACE = 8,
+		SEV_MIN = SEV_FATAL,
+		SEV_MAX = SEV_TRACE
 	};
 
 	enum event_severity
 	{
-		SEV_EVT_FATAL = 10,
-		SEV_EVT_CRITICAL = 11,
-		SEV_EVT_ERROR = 12,
-		SEV_EVT_WARNING = 13,
-		SEV_EVT_NOTICE = 14,
-		SEV_EVT_INFORMATION = 15,
-		SEV_EVT_DEBUG = 16,
-		SEV_EVT_TRACE = 17,
-		SEV_EVT_MIN = SEV_EVT_FATAL,
-		SEV_EVT_MAX = SEV_EVT_TRACE
+		SEV_EVT_EMERGENCY = 10,
+		SEV_EVT_FATAL = 11,
+		SEV_EVT_CRITICAL = 12,
+		SEV_EVT_ERROR = 13,
+		SEV_EVT_WARNING = 14,
+		SEV_EVT_NOTICE = 15,
+		SEV_EVT_INFORMATION = 16,
+		SEV_EVT_DEBUG = 17,
+		SEV_EVT_MIN = SEV_EVT_EMERGENCY,
+		SEV_EVT_MAX = SEV_EVT_DEBUG
 	};
 
 	enum output_type

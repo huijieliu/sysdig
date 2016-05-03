@@ -271,7 +271,7 @@ private:
 template<typename charT>
 struct ci_equal
 {
-	ci_equal( const std::locale& loc ) : m_loc(loc) {}
+	ci_equal(const std::locale& loc) : m_loc(loc) {}
 	bool operator()(charT ch1, charT ch2)
 	{
 		return std::toupper(ch1, m_loc) == std::toupper(ch2, m_loc);

@@ -7,6 +7,7 @@
 #include "json/json.h"
 #include "socket_collector.h"
 #include "uri.h"
+#include "user_event.h"
 #include <sstream>
 #include <utility>
 #include <unordered_map>
@@ -17,12 +18,12 @@ public:
 	typedef std::vector<std::string> uri_list_t;
 	typedef std::shared_ptr<Json::Value> json_ptr_t;
 	typedef std::set<std::string, ci_compare> event_filter_t;
-	typedef std::shared_ptr<event_filter_t> event_filter_ptr_t;
+	typedef user_event_filter_t::ptr_t event_filter_ptr_t;
 
 	static const int default_timeout_ms = 1000L;
 
 	docker(const std::string& url = "",
-		const std::string& path = "/events?since=0",
+		const std::string& path = "/events",
 		const std::string& http_version = "1.0",
 		int timeout_ms = default_timeout_ms,
 		bool is_captured = false,
@@ -39,7 +40,10 @@ public:
 #ifdef HAS_CAPTURE
 	void send_data_request(bool collect = true);
 	void collect_data();
-
+	void set_event_filter(event_filter_ptr_t event_filter)
+	{
+		m_event_filter = event_filter;
+	}
 private:
 	void connect();
 	void send_event_data_request();

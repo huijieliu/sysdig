@@ -56,10 +56,10 @@ k8s::k8s(const std::string& uri, bool start_watch, bool watch_in_thread, bool is
 		ssl_ptr_t ssl, bt_ptr_t bt,
 #endif // HAS_CAPTURE
 		bool curl_debug,
-		event_filter_ptr_t event_filter) :
+		filter_ptr_t event_filter) :
 		m_watch(uri.empty() ? false : start_watch),
 		m_state(is_captured),
-		m_event_filter(/*event_filter*/new event_filter_t{ { "pod", {"*"} } }),
+		m_event_filter(event_filter),
 		m_dispatch(std::move(make_dispatch_map(m_state))),
 		m_watch_in_thread(watch_in_thread)
 #ifdef HAS_CAPTURE

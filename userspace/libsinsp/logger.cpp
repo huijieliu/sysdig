@@ -108,7 +108,7 @@ void sinsp_logger::remove_callback_log()
 
 void sinsp_logger::set_severity(severity sev)
 {
-	if(m_sev > SEV_MAX)
+	if(m_sev < SEV_MIN || m_sev > SEV_MAX)
 	{
 		throw sinsp_exception("invalid log severity");
 	}
@@ -192,12 +192,6 @@ char* sinsp_logger::format(severity sev, const char* fmt, ...)
 
 char* sinsp_logger::format(const char* fmt, ...)
 {
-	if(!is_callback())
-	{
-		m_tbuf[0] = '\0';
-		return m_tbuf;
-	}
-
 	va_list ap;
 
 	va_start(ap, fmt);

@@ -12,9 +12,8 @@
 #include <iostream>
 
 
-k8s_dispatcher::k8s_dispatcher(k8s_component::type t, k8s_state_t& state,
-	k8s::event_filter_ptr_t event_filter):
-		m_type(t), m_state(state), m_event_filter(event_filter)
+k8s_dispatcher::k8s_dispatcher(k8s_component::type t, k8s_state_t& state, filter_ptr_t event_filter):
+	m_type(t), m_state(state), m_event_filter(event_filter)
 {
 }
 
@@ -477,15 +476,6 @@ void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
 {
 	if(m_event_filter)
 	{
-		g_logger.log("K8s EVENT: filter found.", sinsp_logger::SEV_DEBUG);
-		for(const auto& f : *m_event_filter)
-		{
-			g_logger.log("K8s EVENT kind: " + f.kind(), sinsp_logger::SEV_DEBUG);
-			for(const auto& t : f.types())
-			{
-				g_logger.log("K8s EVENT type: " + t, sinsp_logger::SEV_DEBUG);
-			}
-		}
 		const Json::Value& object = root["object"];
 		if(!object.isNull())
 		{
@@ -493,38 +483,41 @@ void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
 			const Json::Value& involved_object = object["involvedObject"];
 			if(!involved_object.isNull())
 			{
-				g_logger.log("K8s EVENT: involved object found.", sinsp_logger::SEV_DEBUG);
 				const Json::Value& kind = involved_object["kind"];
 				const Json::Value& event_type = root["type"];
+				g_logger.log("K8s EVENT: involved object and event type found:" + kind.asString() + '/' + event_type.asString(), sinsp_logger::SEV_DEBUG);
 				if(!kind.isNull() && kind.isConvertibleTo(Json::stringValue) &&
 					!event_type.isNull() && event_type.isConvertibleTo(Json::stringValue))
 				{
-					k8s::event_t evt{kind.asString(), { event_type.asString() }};
-					g_logger.log("K8s EVENT: kind found.", sinsp_logger::SEV_DEBUG);
-					if(m_event_filter->find(evt) != m_event_filter->end())
+					if(m_event_filter->has(kind.asString(), event_type.asString()))
 					{
 						g_logger.log("K8s EVENT: adding event.", sinsp_logger::SEV_DEBUG);
 						k8s_event_t& evt = m_state.add_component<k8s_events, k8s_event_t>(m_state.get_events(),
 													data.m_name, data.m_uid, data.m_namespace);
 						m_state.update_event(evt, object);
 					}
+					else
+					{
+						g_logger.log("K8s EVENT: filter does not allow {\"" + kind.asString() + "\", \"{" + event_type.asString() + "\"} }", sinsp_logger::SEV_DEBUG);
+						g_logger.log(m_event_filter->to_string(), sinsp_logger::SEV_TRACE);
+					}
 				}
 				else
 				{
 					g_logger.log("K8s EVENT: event type or involvedObject kind not found.", sinsp_logger::SEV_ERROR);
-					g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+					g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_TRACE);
 				}
 			}
 			else
 			{
 				g_logger.log("K8s EVENT: involvedObject not found.", sinsp_logger::SEV_ERROR);
-				g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+				g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_TRACE);
 			}
 		}
 		else
 		{
 			g_logger.log("K8s EVENT: object not found.", sinsp_logger::SEV_ERROR);
-			g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_DEBUG);
+			g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_TRACE);
 		}
 	}
 	else

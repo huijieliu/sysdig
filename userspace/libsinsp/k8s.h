@@ -26,77 +26,7 @@ public:
 	typedef sinsp_curl::bearer_token::ptr_t bt_ptr_t;
 #endif // HAS_CAPTURE
 
-	class event_t
-	{
-	public:
-
-		typedef std::set<std::string, ci_compare> type_list_t;
-
-		event_t() = delete;
-
-		event_t(const std::string& kind, const type_list_t& types):
-			m_kind(kind), m_types(types)
-		{
-		}
-
-		event_t(std::string&& kind, type_list_t&& types):
-			m_kind(std::move(kind)), m_types(std::move(types))
-		{
-		}
-
-		bool operator < (const event_t& other) const
-		{
-			return strcasecmp(m_kind.c_str(), other.m_kind.c_str()) < 0;
-		}
-
-		bool operator == (const event_t& other) const
-		{
-			bool retval = (strcasecmp(m_kind.c_str(), other.m_kind.c_str()) == 0);
-			if(retval)
-			{
-				retval &= (other.m_types.size() <= this->m_types.size());
-				if(retval)
-				{
-					type_list_t::const_iterator it = this->m_types.begin();
-					for(const auto& t : other.m_types)
-					{
-						retval &= (strcasecmp(t.c_str(), it->c_str()) == 0);
-						if(!retval) { break; }
-						++it;
-					}
-				}
-			}
-			return retval;
-		}
-
-		const std::string& kind() const
-		{
-			return m_kind;
-		}
-
-		const type_list_t& types() const
-		{
-			return m_types;
-		}
-
-		bool has_type(const std::string& type) const
-		{
-			return m_types.find(type) != m_types.end() ||
-					any_type();
-		}
-
-		bool any_type() const
-		{
-			return m_types.find("*") != m_types.end();
-		}
-
-	private:
-		std::string m_kind;
-		type_list_t m_types;
-	};
-
-	typedef std::set<event_t> event_filter_t;
-	typedef std::shared_ptr<event_filter_t> event_filter_ptr_t;
+	typedef user_event_filter_t::ptr_t filter_ptr_t;
 
 	k8s(const std::string& uri = "http://localhost:80",
 		bool start_watch = false,
@@ -108,7 +38,7 @@ public:
 		bt_ptr_t bt = 0,
 #endif // HAS_CAPTURE
 		bool curl_debug = false,
-		event_filter_ptr_t event_filter = nullptr);
+		filter_ptr_t event_filter = nullptr);
 
 	~k8s();
 
@@ -150,11 +80,11 @@ private:
 	typedef std::map<k8s_component::type, k8s_dispatcher*> dispatch_map;
 	dispatch_map make_dispatch_map(k8s_state_t& state);
 
-	bool               m_watch;
-	k8s_state_t        m_state;
-	event_filter_ptr_t m_event_filter;
-	dispatch_map       m_dispatch;
-	bool               m_watch_in_thread;
+	bool         m_watch;
+	k8s_state_t  m_state;
+	filter_ptr_t m_event_filter;
+	dispatch_map m_dispatch;
+	bool         m_watch_in_thread;
 #ifdef HAS_CAPTURE
 	k8s_net*     m_net;
 #endif

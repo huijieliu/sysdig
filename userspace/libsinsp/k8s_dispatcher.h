@@ -18,8 +18,7 @@
 class k8s_dispatcher
 {
 public:
-	typedef k8s::event_filter_t event_filter_t;
-	typedef k8s::event_filter_ptr_t event_filter_ptr_t;
+	typedef user_event_filter_t::ptr_t filter_ptr_t;
 
 	enum msg_reason
 	{
@@ -47,7 +46,7 @@ public:
 
 	k8s_dispatcher(k8s_component::type t,
 		k8s_state_t& state,
-		event_filter_ptr_t event_filter = nullptr);
+		filter_ptr_t event_filter = nullptr);
 
 	void enqueue(k8s_event_data&& data);
 
@@ -111,10 +110,10 @@ private:
 
 	typedef std::deque<std::string> list;
 
-	k8s_component::type     m_type;
-	list                    m_messages;
-	k8s_state_t&            m_state;
-	k8s::event_filter_ptr_t m_event_filter;
+	k8s_component::type m_type;
+	list                m_messages;
+	k8s_state_t&        m_state;
+	filter_ptr_t        m_event_filter;
 };
 
 
