@@ -34,11 +34,12 @@ docker::docker(const std::string& url,
 	m_collector.add(m_event_http);
 	send_data_request();
 
+	// container
 	m_severity_map["attach"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["commit"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["copy"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["create"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["destroy"] = sinsp_logger::SEV_EVT_INFORMATION;
+	m_severity_map["destroy"] = sinsp_logger::SEV_EVT_WARNING;
 	m_severity_map["die"] = sinsp_logger::SEV_EVT_WARNING;
 	m_severity_map["exec_create"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["exec_start"] = sinsp_logger::SEV_EVT_INFORMATION;
@@ -54,14 +55,20 @@ docker::docker(const std::string& url,
 	m_severity_map["top"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["unpause"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["update"] = sinsp_logger::SEV_EVT_INFORMATION;
+
+	// image
 	m_severity_map["delete"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["import"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["pull"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["push"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["tag"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["untag"] = sinsp_logger::SEV_EVT_INFORMATION;
+
+	// volume
 	m_severity_map["mount"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["unmount"] = sinsp_logger::SEV_EVT_INFORMATION;
+
+	// network
 	m_severity_map["connect"] = sinsp_logger::SEV_EVT_INFORMATION;
 	m_severity_map["disconnect"] = sinsp_logger::SEV_EVT_INFORMATION;
 #endif
@@ -98,7 +105,7 @@ bool docker::is_alive() const
 #ifdef HAS_CAPTURE
 	if(m_event_http && !m_event_http->is_connected())
 	{
-		g_logger.log("Mesos state connection loss.", sinsp_logger::SEV_WARNING);
+		g_logger.log("Docker state connection loss.", sinsp_logger::SEV_WARNING);
 		return false;
 	}
 #endif // HAS_CAPTURE
@@ -164,34 +171,44 @@ void docker::handle_event(Json::Value&& root)
 	if(m_event_filter)
 	{
 		std::string type = get_json_string(root, "Type");
-		std::string status = get_json_string(root, "status");
+		std::string status = get_json_string(root, "Action");
+		if(status.empty())
+		{
+			status = get_json_string(root, "status");
+		}
+		g_logger.log("Docker EVENT: type=" + type + ", status=" + status, sinsp_logger::SEV_DEBUG);
 		bool is_allowed = m_event_filter->allows_all();
 		if(!is_allowed && !type.empty())
 		{
 			is_allowed = m_event_filter->allows_all(type);
-		}
-		else if(!is_allowed && !status.empty())
-		{
-			is_allowed = m_event_filter->has(type, status);
+			if(!is_allowed && !status.empty())
+			{
+				is_allowed = m_event_filter->has(type, status);
+			}
 		}
 		if(is_allowed)
 		{
+			g_logger.log("Docker EVENT: handling " + status + " of " + type, sinsp_logger::SEV_DEBUG);
 			severity_map_t::const_iterator it = m_severity_map.find(status);
-			if(it == m_severity_map.end())
+			if(it != m_severity_map.end())
 			{
 				severity_t severity;
-				std::string event_name = get_json_string(root, "from");
+				std::string event_name = status;//get_json_string(root, "from");
 				std::string id = get_json_string(root, "id");
+				if(id.length() > 7 && id.substr(0, 7) == "sha256:") // untag and delete have "sha256:id" format
+				{
+					id = id.substr(7);
+				}
 				if(id.length() >= 12) { id = id.substr(0, 12); }
 				severity = (it != m_severity_map.end()) ? it->second : sinsp_logger::SEV_EVT_ERROR;
-
+				g_logger.log("Docker EVENT: severity for " + status + '=' + std::to_string(severity - sinsp_logger::SEV_EVT_MIN), sinsp_logger::SEV_DEBUG);
 				uint64_t epoch_time_s = static_cast<uint64_t>(~0);
 				Json::Value t = root["time"];
 				if(!t.isNull() && t.isConvertibleTo(Json::uintValue))
 				{
 					epoch_time_s = t.asUInt64();
 				}
-				g_logger.log("Docker event: name=" + event_name + ", id=" + id +
+				g_logger.log("Docker EVENT: name=" + event_name + ", id=" + id +
 							", status=" + status + ", time=" + std::to_string(epoch_time_s),
 							sinsp_logger::SEV_DEBUG);
 				if(m_verbose)
@@ -199,32 +216,64 @@ void docker::handle_event(Json::Value&& root)
 					std::cout << Json::FastWriter().write(root) << std::endl;
 				}
 
-				std::string scope("container.id=");
-				scope.append(id);
+				Json::Value no_value = Json::nullValue;
 				const Json::Value& actor = root["Actor"];
+				const Json::Value& attrib = actor.isNull() ? no_value : actor["Attributes"];
+				const Json::Value& img = attrib.isNull() ? no_value : attrib["image"];
+				std::string image;
+				if(!img.isNull() && img.isConvertibleTo(Json::stringValue))
+				{
+					image = img.asString();
+				}
+				std::string scope("host.mac=");
+				if(m_machine_id.length())
+				{
+					scope.append(m_machine_id);
+				}
+				else
+				{
+					scope.clear();
+				}
+				if(id.length())
+				{
+					if(scope.length())
+					{
+						scope.append(" and ");
+					}
+					if(image == id)
+					{
+						scope.append("container.image=").append(image);
+					}
+					else
+					{
+						scope.append("container.id=").append(id);
+					}
+				}
+				if(status.length())
+				{
+					status.insert(0, "Event: ", 7);
+				}
 				if(!actor.isNull() && actor.isObject())
 				{
-					const Json::Value& attrib = actor["Attributes"];
 					if(!attrib.isNull() && attrib.isObject())
 					{
-						const Json::Value& img = attrib["image"];
-						if(!img.isNull() && img.isConvertibleTo(Json::stringValue))
+						if(!image.empty())
 						{
-							status.append("; Image: ").append(img.asString());
+							status.append("; Image: ").append(image);
 						}
 						const Json::Value& name = attrib["name"];
 						if(!name.isNull() && name.isConvertibleTo(Json::stringValue))
 						{
-							status.append("; Name: ").append(img.asString());
+							status.append("; Name: ").append(name.asString());
 						}
 					}
 				}
 				sinsp_user_event::tag_map_t tags;
-				tags["sysdig_event_source"] = "docker";
+				tags["source"] = "docker";
 				std::string evt = sinsp_user_event::to_string(epoch_time_s, std::move(event_name),
 									std::move(status), std::move(scope), std::move(tags));
 				g_logger.log(std::move(evt), severity);
-				//g_logger.log(evt, sinsp_logger::SEV_DEBUG);
+				g_logger.log("Docker EVENT: scheduled for sending\n" + evt, sinsp_logger::SEV_TRACE);
 			}
 			else
 			{

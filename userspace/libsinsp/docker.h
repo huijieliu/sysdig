@@ -40,10 +40,10 @@ public:
 #ifdef HAS_CAPTURE
 	void send_data_request(bool collect = true);
 	void collect_data();
-	void set_event_filter(event_filter_ptr_t event_filter)
-	{
-		m_event_filter = event_filter;
-	}
+	void set_event_filter(event_filter_ptr_t event_filter);
+	void set_machine_id(const std::string& machine_id);
+	const std::string& get_machine_id() const;
+
 private:
 	void connect();
 	void send_event_data_request();
@@ -91,6 +91,7 @@ private:
 	bool               m_is_captured;
 	bool               m_verbose;
 	event_filter_ptr_t m_event_filter;
+	std::string        m_machine_id;
 
 	typedef std::vector<json_ptr_t> event_list_t;
 	typedef sinsp_logger::event_severity severity_t;
@@ -103,5 +104,20 @@ private:
 inline const std::string& docker::get_id() const
 {
 	return m_id;
+}
+
+inline void docker::set_event_filter(event_filter_ptr_t event_filter)
+{
+	m_event_filter = event_filter;
+}
+
+inline void docker::set_machine_id(const std::string& machine_id)
+{
+	m_machine_id = machine_id;
+}
+
+inline const std::string& docker::get_machine_id() const
+{
+	return m_machine_id;
 }
 

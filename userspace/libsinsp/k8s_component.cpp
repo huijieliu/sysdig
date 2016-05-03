@@ -663,28 +663,26 @@ void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
 		g_logger.log("K8s event: cannot convert time (null, empty or not string)", sinsp_logger::SEV_ERROR);
 	}
 	event_name = get_json_string(item , "reason");
-/*
-	const Json::Value& metadata = item["metadata"];
-	if(!metadata.isNull())
-	{
-		//event_name = get_json_string(metadata, "namespace") + '/' + get_json_string(metadata, "name");
-		g_logger.log("K8s EVENT name:" + event_name, sinsp_logger::SEV_DEBUG);
-	}
-	else
-	{
-		g_logger.log("K8s event: cannot get metadata (null)", sinsp_logger::SEV_ERROR);
-	}
-*/
+
 	description = get_json_string(item, "message");
 	g_logger.log("K8s EVENT message:" + description, sinsp_logger::SEV_DEBUG);
 
 	string component_uid = get_json_string(obj, "uid");
 	if(!component_uid.empty())
 	{
+		const Json::Value& machine_id = item["sysdig_machine_id"];
+		if(!machine_id.isNull() && machine_id.isConvertibleTo(Json::stringValue))
+		{
+			scope.append("host.mac=").append(machine_id.asString());
+		}
 		std::string t;
 		const k8s_component* comp = state.get_component(component_uid, &t);
 		if(comp && !t.empty())
 		{
+			if(scope.length())
+			{
+				scope.append(" and ");
+			}
 			scope.append("kubernetes.").append(t).append(".name=").append(comp->get_name());
 			const std::string& ns = get_namespace();
 			if(!ns.empty())

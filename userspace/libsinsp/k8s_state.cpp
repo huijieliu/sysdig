@@ -41,7 +41,7 @@ bool k8s_state_t::has_pod(k8s_pod_t& pod)
 	return false;
 }
 
-// state/pods
+// state/events
 
 void k8s_state_t::update_event(k8s_event_t& evt, const Json::Value& item)
 {
@@ -85,12 +85,7 @@ void k8s_state_t::replace_items(k8s_component::type t, const std::string& name, 
 		}
 		break;
 
-	case k8s_component::K8S_EVENTS:/*TODO: events
-		if(name == "labels")
-		{
-			m_pods.back().m_labels = std::move(items);
-			return;
-		}*/
+	case k8s_component::K8S_EVENTS:
 		break;
 
 	// only controllers and services can have selectors
