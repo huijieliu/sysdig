@@ -46,8 +46,7 @@ public:
 
 	k8s_dispatcher(k8s_component::type t,
 		k8s_state_t& state,
-		filter_ptr_t event_filter = nullptr,
-		const std::string& machine_id = "");
+		filter_ptr_t event_filter = nullptr);
 
 	void enqueue(k8s_event_data&& data);
 

@@ -34,7 +34,7 @@ k8s::dispatch_map k8s::make_dispatch_map(k8s_state_t& state)
 			{ k8s_component::K8S_PODS,                   new k8s_dispatcher(k8s_component::K8S_PODS,                   state) },
 			{ k8s_component::K8S_REPLICATIONCONTROLLERS, new k8s_dispatcher(k8s_component::K8S_REPLICATIONCONTROLLERS, state) },
 			{ k8s_component::K8S_SERVICES,               new k8s_dispatcher(k8s_component::K8S_SERVICES,               state) },
-			{ k8s_component::K8S_EVENTS,                 new k8s_dispatcher(k8s_component::K8S_EVENTS,                 state, m_event_filter, m_machine_id) }
+			{ k8s_component::K8S_EVENTS,                 new k8s_dispatcher(k8s_component::K8S_EVENTS,                 state, m_event_filter) }
 		};
 	}
 	else
@@ -56,12 +56,10 @@ k8s::k8s(const std::string& uri, bool start_watch, bool watch_in_thread, bool is
 		ssl_ptr_t ssl, bt_ptr_t bt,
 #endif // HAS_CAPTURE
 		bool curl_debug,
-		filter_ptr_t event_filter,
-		const std::string& machine_id) :
+		filter_ptr_t event_filter) :
 		m_watch(uri.empty() ? false : start_watch),
 		m_state(is_captured),
 		m_event_filter(event_filter),
-		m_machine_id(m_event_filter ? machine_id : std::string()),
 		m_dispatch(std::move(make_dispatch_map(m_state))),
 		m_watch_in_thread(watch_in_thread)
 #ifdef HAS_CAPTURE

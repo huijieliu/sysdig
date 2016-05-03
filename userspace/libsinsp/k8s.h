@@ -38,8 +38,7 @@ public:
 		bt_ptr_t bt = 0,
 #endif // HAS_CAPTURE
 		bool curl_debug = false,
-		filter_ptr_t event_filter = nullptr,
-		const std::string& machine_id = "");
+		filter_ptr_t event_filter = nullptr);
 
 	~k8s();
 
@@ -54,9 +53,6 @@ public:
 	void stop_watching();
 
 	bool is_alive() const;
-
-	void set_machine_id(const std::string& machine_id);
-	const std::string& get_machine_id() const;
 
 #ifdef HAS_CAPTURE
 	typedef k8s_state_t::event_list_t event_list_t;
@@ -85,7 +81,6 @@ private:
 	bool         m_watch;
 	k8s_state_t  m_state;
 	filter_ptr_t m_event_filter;
-	std::string  m_machine_id;
 	dispatch_map m_dispatch;
 	bool         m_watch_in_thread;
 #ifdef HAS_CAPTURE
@@ -108,14 +103,4 @@ inline bool k8s::is_alive() const
 inline bool k8s::watch_in_thread() const
 {
 	return m_watch_in_thread;
-}
-
-inline void k8s::set_machine_id(const std::string& machine_id)
-{
-	m_machine_id = machine_id;
-}
-
-inline const std::string& k8s::get_machine_id() const
-{
-	return m_machine_id;
 }

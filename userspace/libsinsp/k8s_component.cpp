@@ -670,11 +670,11 @@ void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
 	string component_uid = get_json_string(obj, "uid");
 	if(!component_uid.empty())
 	{
-		const Json::Value& machine_id = item["sysdig_machine_id"];
+		/*const Json::Value& machine_id = item["sysdig_machine_id"];
 		if(!machine_id.isNull() && machine_id.isConvertibleTo(Json::stringValue))
 		{
 			scope.append("host.mac=").append(machine_id.asString());
-		}
+		}*/
 		std::string t;
 		const k8s_component* comp = state.get_component(component_uid, &t);
 		if(comp && !t.empty())

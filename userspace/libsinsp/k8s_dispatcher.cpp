@@ -13,8 +13,8 @@
 
 
 k8s_dispatcher::k8s_dispatcher(k8s_component::type t, k8s_state_t& state,
-							   filter_ptr_t event_filter, const std::string& machine_id):
-	m_type(t), m_state(state), m_event_filter(event_filter), m_machine_id(machine_id)
+							   filter_ptr_t event_filter):
+	m_type(t), m_state(state), m_event_filter(event_filter)
 {
 }
 
@@ -477,7 +477,7 @@ void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
 {
 	if(m_event_filter)
 	{
-		Json::Value object = root["object"];
+		const Json::Value& object = root["object"];
 		if(!object.isNull())
 		{
 			g_logger.log("K8s EVENT: object found.", sinsp_logger::SEV_DEBUG);
@@ -495,10 +495,6 @@ void k8s_dispatcher::handle_event(const Json::Value& root, const msg_data& data)
 						g_logger.log("K8s EVENT: adding event.", sinsp_logger::SEV_DEBUG);
 						k8s_event_t& evt = m_state.add_component<k8s_events, k8s_event_t>(m_state.get_events(),
 													data.m_name, data.m_uid, data.m_namespace);
-						if(m_machine_id.length()) // inject sysdig's host mac into event json
-						{
-							object["sysdig_machine_id"] = m_machine_id;
-						}
 						m_state.update_event(evt, object);
 					}
 					else
