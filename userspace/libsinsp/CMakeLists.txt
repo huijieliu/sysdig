@@ -57,6 +57,7 @@ add_library(sinsp STATIC
 	stats.cpp
 	table.cpp
 	sinsp_curl.cpp
+	uri_parser.c
 	uri.cpp
 	utils.cpp
 	user_event.cpp

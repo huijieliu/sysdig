@@ -4,63 +4,34 @@
 // URI utility
 //
 
-#include  "uri.h"
-#include  <sstream>
+#include "uri.h"
+#include "sinsp.h"
+#include <sstream>
 
-uri::uri(std::string str): m_port(0)
+uri::uri(std::string str)
 {
-	m_scheme = extract_protocol(str);
-	m_query = extract_query(str);
-	m_path = extract_path(str);
-	std::string auth = extract_auth(str);
-	m_password = extract_password(auth);
-	m_user = auth;
-	m_port = extract_port(str);
-	m_host = str;
-}
-
-std::string uri::tail_chunk(std::string &subject, std::string delimiter, bool keep_delim)
-{
-	auto delimiter_location = subject.find(delimiter);
-	auto delimiter_length = delimiter.length();
-	std::string output;
-
-	if(delimiter_location != std::string::npos)
+	parsed_uri p_uri = parse_uri(str.c_str());
+	if(p_uri.error)
 	{
-		auto start = keep_delim ? delimiter_location : delimiter_location + delimiter_length;
-		auto end = subject.length() - start;
-		output = subject.substr(start, end);
-		subject = subject.substr(0, delimiter_location);
+		str.insert(0, std::string("Invalid URI: [").append(1, ']'));
+		throw sinsp_exception(str);
 	}
-	return output;
-}
-
-std::string uri::head_chunk(std::string &subject, std::string delimiter) 
-{
-	auto delimiter_location = subject.find(delimiter);
-	auto delimiter_length = delimiter.length();
-	std::string output;
-	if(delimiter_location != std::string::npos)
+	m_scheme = str.substr(p_uri.scheme_start, p_uri.scheme_end - p_uri.scheme_start);
+	m_host = str.substr(p_uri.host_start, p_uri.host_end - p_uri.host_start);
+	m_port = p_uri.port;
+	m_path = str.substr(p_uri.path_start, p_uri.path_end - p_uri.path_start);
+	m_query = str.substr(p_uri.query_start, p_uri.query_end - p_uri.query_start);
+	if(p_uri.user_info_end != p_uri.user_info_start)
 	{
-		output = subject.substr(0, delimiter_location);
-		subject = subject.substr(delimiter_location + delimiter_length, subject.length() - (delimiter_location + delimiter_length));
+		std::string auth = str.substr(p_uri.user_info_start, p_uri.user_info_end - p_uri.user_info_start);
+		std::string::size_type pos = auth.find(':');
+		if(pos == std::string::npos)
+		{
+			throw sinsp_exception("Invalid credentials format.");
+		}
+		m_user = auth.substr(0, pos);
+		m_password = auth.substr(pos + 1);
 	}
-	return output;
-}
-
-int uri::extract_port(std::string& hostport)
-{
-	int m_port;
-	std::string portstring = tail_chunk(hostport, ":");
-	try
-	{
-		m_port = atoi(portstring.c_str()); 
-	}
-	catch (std::exception e)
-	{
-		m_port = 0;
-	}
-	return m_port;
 }
 
 std::string uri::to_string(bool show_creds) const
