@@ -78,6 +78,7 @@ public:
 	void remove_callback_log();
 
 	void set_severity(severity sev);
+	severity get_severity() const;
 
 	void log(string msg, severity sev=SEV_INFO);
 	void log(string msg, event_severity sev);

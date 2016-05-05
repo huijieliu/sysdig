@@ -113,7 +113,7 @@ sinsp_initializer::sinsp_initializer()
 	//
 	// Init the logger
 	//
-	g_logger.set_severity(sinsp_logger::SEV_DEBUG);
+	g_logger.set_severity(sinsp_logger::SEV_TRACE);
 
 #ifdef HAS_CHISELS
 	//

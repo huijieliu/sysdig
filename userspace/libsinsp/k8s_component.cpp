@@ -670,19 +670,17 @@ void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
 	string component_uid = get_json_string(obj, "uid");
 	if(!component_uid.empty())
 	{
-		/*const Json::Value& machine_id = item["sysdig_machine_id"];
-		if(!machine_id.isNull() && machine_id.isConvertibleTo(Json::stringValue))
-		{
-			scope.append("host.mac=").append(machine_id.asString());
-		}*/
 		std::string t;
 		const k8s_component* comp = state.get_component(component_uid, &t);
 		if(comp && !t.empty())
 		{
-			if(scope.length())
+			std::string node_name = comp->get_node_name();
+			if(!node_name.empty())
 			{
-				scope.append(" and ");
+				if(scope.length()) { scope.append(" and "); }
+				scope.append("kubernetes.node.name=").append(node_name);
 			}
+			if(scope.length()) { scope.append(" and "); }
 			scope.append("kubernetes.").append(t).append(".name=").append(comp->get_name());
 			const std::string& ns = get_namespace();
 			if(!ns.empty())

@@ -116,6 +116,11 @@ void sinsp_logger::set_severity(severity sev)
 	m_sev = sev;
 }
 
+sinsp_logger::severity sinsp_logger::get_severity() const
+{
+	return m_sev;
+}
+
 void sinsp_logger::log(string msg, event_severity sev)
 {
 	if(is_callback())

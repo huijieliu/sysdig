@@ -146,6 +146,8 @@ public:
 
 	void emplace_selector(k8s_pair_t&& selector);
 
+	virtual std::string get_node_name() const;
+
 	// extracts labels or selectors
 	static k8s_pair_list extract_object(const Json::Value& object, const std::string& name);
 
@@ -216,6 +218,8 @@ public:
 
 	void emplace_host_ip(std::string&& host_ip);
 
+	virtual std::string get_node_name() const;
+
 	static host_ip_list extract_addresses(const Json::Value& status);
 
 private:
@@ -258,7 +262,7 @@ public:
 	k8s_container* get_container(const std::string& container_name);
 
 	// node name, host IP and internal IP
-	const std::string& get_node_name() const;
+	virtual std::string get_node_name() const;
 	void set_node_name(const std::string& name);
 	const std::string& get_host_ip() const;
 	void set_host_ip(const std::string& host_ip);
@@ -542,6 +546,11 @@ inline k8s_component::type k8s_component::get_type(const component_pair& p)
 	return p.first;
 }
 
+inline std::string k8s_component::get_node_name() const
+{
+	return "";
+}
+
 //
 // node
 //
@@ -566,6 +575,10 @@ inline void k8s_node_t::emplace_host_ip(std::string&& host_ip)
 	m_host_ips.emplace(std::move(host_ip));
 }
 
+inline std::string k8s_node_t::get_node_name() const
+{
+	return get_name();
+}
 
 //
 // pod 
@@ -681,7 +694,8 @@ inline void k8s_pod_t::emplace_container(k8s_container&& container)
 	m_containers.emplace_back(std::move(container));
 }
 
-inline const std::string& k8s_pod_t::get_node_name() const
+// getters/setters
+inline std::string k8s_pod_t::get_node_name() const
 {
 	return m_node_name;
 }
