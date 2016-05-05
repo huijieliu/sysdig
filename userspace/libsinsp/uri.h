@@ -9,11 +9,15 @@
 #include "uri_parser.h"
 #include <string>
 
+// TODO: support segments
 class uri
 {
 public:
+	static const std::string SPECIAL_CHARS;
+	static const std::string AMBIGUOUS_CHARS;
+
 	uri() = delete;
-	
+
 	uri(std::string str);
 
 	const std::string& get_scheme() const;
@@ -29,9 +33,21 @@ public:
 
 	std::string to_string(bool show_creds = true) const;
 
+	// URI-encodes the given string by escaping reserved, ambiguous and non-ASCII
+	// characters. Returns the encoded string with uppercase hex letters (eg. %5B, not %5b).
+	static std::string encode(const std::string& str, const std::string& reserved = "");
+
+	// URI-decodes the given string by replacing percent-encoded
+	// characters with the actual character. Returns the decoded string.
+	//
+	// When plus_as_space is true, non-encoded plus signs in the query are decoded as spaces.
+	// (http://www.w3.org/TR/html401/interact/forms.html#h-17.13.4.1)
+	static std::string decode(const std::string& str, bool plus_as_space = false);
+
 private:
 	std::string m_scheme, m_user, m_password, m_host, m_path, m_query;
 	int m_port;
+	bool m_has_port = true;
 };
 
 inline const std::string& uri::get_scheme() const

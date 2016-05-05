@@ -7,6 +7,10 @@
 #include "uri.h"
 #include "sinsp.h"
 #include <sstream>
+#include <iomanip>
+
+const std::string uri::SPECIAL_CHARS = "!#$&'()*+,/:;=?@[]";
+const std::string uri::AMBIGUOUS_CHARS = " \"%-.<>\\^_`{|}~";
 
 uri::uri(std::string str)
 {
@@ -19,6 +23,19 @@ uri::uri(std::string str)
 	m_scheme = str.substr(p_uri.scheme_start, p_uri.scheme_end - p_uri.scheme_start);
 	m_host = str.substr(p_uri.host_start, p_uri.host_end - p_uri.host_start);
 	m_port = p_uri.port;
+	if(m_port == 0)
+	{
+		m_has_port = false;
+		if(m_scheme == "http")
+		{
+			m_port = 80;
+		}
+		else if(m_scheme == "https")
+		{
+			m_port = 443;
+		}
+		// TODO ...
+	}
 	m_path = str.substr(p_uri.path_start, p_uri.path_end - p_uri.path_start);
 	m_query = str.substr(p_uri.query_start, p_uri.query_end - p_uri.query_start);
 	if(p_uri.user_info_end != p_uri.user_info_start)
@@ -50,7 +67,7 @@ std::string uri::to_string(bool show_creds) const
 		}
 	}
 	ostr << m_host;
-	if(m_port)
+	if(m_port && m_has_port)
 	{
 		ostr << ':' << m_port;
 	}
@@ -60,4 +77,107 @@ std::string uri::to_string(bool show_creds) const
 		ostr << '?' << m_query;
 	}
 	return ostr.str();
+}
+
+std::string uri::encode(const std::string& str, const std::string& reserved)
+{
+	std::string encoded_str;
+	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it)
+	{
+		char c = *it;
+		if((c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9'))
+		{
+			encoded_str += c;
+		}
+		else if (c <= 0x20 || c >= 0x7F ||
+				 SPECIAL_CHARS.find(c) != std::string::npos ||
+				 AMBIGUOUS_CHARS.find(c) != std::string::npos ||
+				 reserved.find(c) != std::string::npos)
+		{
+			std::ostringstream ostr;
+			ostr << "%" << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << ((unsigned) (unsigned char) c);
+			encoded_str.append(ostr.str());
+		}
+		else
+		{
+			encoded_str += c;
+		}
+	}
+	return encoded_str;
+}
+
+// URI-decodes the given string by replacing percent-encoded
+// characters with the actual character. Returns the decoded string.
+//
+// When plus_as_space is true, non-encoded plus signs in the query are decoded as spaces.
+// (http://www.w3.org/TR/html401/interact/forms.html#h-17.13.4.1)
+std::string uri::decode(const std::string& str, bool plus_as_space)
+{
+	std::string decoded_str;
+	bool in_query = false;
+	std::string::const_iterator it  = str.begin();
+	std::string::const_iterator end = str.end();
+	while(it != end)
+	{
+		char c = *it++;
+		if(c == '?')
+		{
+			in_query = true;
+		}
+		// spaces may be encoded as plus signs in the query
+		if(in_query && plus_as_space && c == '+')
+		{
+			c = ' ';
+		}
+		else if(c == '%')
+		{
+			if (it == end)
+			{
+				throw sinsp_exception("URI encoding: no hex digit following percent sign in " + str);
+			}
+			char hi = *it++;
+			if (it == end)
+			{
+				throw sinsp_exception("URI encoding: two hex digits must follow percent sign in " + str);
+			}
+			char lo = *it++;
+			if (hi >= '0' && hi <= '9')
+			{
+				c = hi - '0';
+			}
+			else if (hi >= 'A' && hi <= 'F')
+			{
+				c = hi - 'A' + 10;
+			}
+			else if (hi >= 'a' && hi <= 'f')
+			{
+				c = hi - 'a' + 10;
+			}
+			else
+			{
+				throw sinsp_exception("URI encoding: not a hex digit found in " + str);
+			}
+			c *= 16;
+			if (lo >= '0' && lo <= '9')
+			{
+				c += lo - '0';
+			}
+			else if (lo >= 'A' && lo <= 'F')
+			{
+				c += lo - 'A' + 10;
+			}
+			else if (lo >= 'a' && lo <= 'f')
+			{
+				c += lo - 'a' + 10;
+			}
+			else
+			{
+				throw sinsp_exception("URI encoding: not a hex digit");
+			}
+		}
+		decoded_str += c;
+	}
+	return decoded_str;
 }

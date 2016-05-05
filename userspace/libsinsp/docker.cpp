@@ -200,7 +200,7 @@ void docker::handle_event(Json::Value&& root)
 					id = id.substr(7);
 				}
 				if(id.length() >= 12) { id = id.substr(0, 12); }
-				severity = (it != m_severity_map.end()) ? it->second : sinsp_logger::SEV_EVT_ERROR;
+				severity = it->second;
 				g_logger.log("Docker EVENT: severity for " + status + '=' + std::to_string(severity - sinsp_logger::SEV_EVT_MIN), sinsp_logger::SEV_DEBUG);
 				uint64_t epoch_time_s = static_cast<uint64_t>(~0);
 				Json::Value t = root["time"];

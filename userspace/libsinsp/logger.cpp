@@ -126,17 +126,14 @@ void sinsp_logger::log(string msg, event_severity sev)
 
 void sinsp_logger::log(string msg, severity sev)
 {
-	if(!is_callback() && is_user_event(sev)) { return; }
-
-	struct timeval ts;
-
-	if(sev < m_sev)
+	if((sev > m_sev) || is_user_event(sev))
 	{
 		return;
 	}
 
 	if((m_flags & sinsp_logger::OT_NOTS) == 0)
 	{
+		struct timeval ts;
 		gettimeofday(&ts, NULL);
 		time_t rawtime = (time_t)ts.tv_sec;
 		struct tm* time_info = gmtime(&rawtime);
