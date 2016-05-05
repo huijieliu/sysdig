@@ -9,7 +9,7 @@
 #include "uri_parser.h"
 #include <string>
 
-// TODO: support segments
+// TODO: support fragments
 class uri
 {
 public:
