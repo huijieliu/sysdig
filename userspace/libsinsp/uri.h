@@ -45,6 +45,8 @@ public:
 	static std::string decode(const std::string& str, bool plus_as_space = false);
 
 private:
+	int get_well_known_port() const;
+
 	std::string m_scheme, m_user, m_password, m_host, m_path, m_query;
 	int m_port;
 	bool m_has_port = true;

@@ -26,15 +26,7 @@ uri::uri(std::string str)
 	if(m_port == 0)
 	{
 		m_has_port = false;
-		if(m_scheme == "http")
-		{
-			m_port = 80;
-		}
-		else if(m_scheme == "https")
-		{
-			m_port = 443;
-		}
-		// TODO ...
+		m_port = get_well_known_port();
 	}
 	m_path = str.substr(p_uri.path_start, p_uri.path_end - p_uri.path_start);
 	m_query = str.substr(p_uri.query_start, p_uri.query_end - p_uri.query_start);
@@ -49,6 +41,25 @@ uri::uri(std::string str)
 		m_user = auth.substr(0, pos);
 		m_password = auth.substr(pos + 1);
 	}
+}
+
+int uri::get_well_known_port() const
+{
+	if (!m_scheme.empty())
+	{
+		if(m_scheme == "http")        { return 80;   }
+		else if(m_scheme == "https")  { return 443;  }
+		else if(m_scheme == "ftp")    { return 21;   }
+		else if(m_scheme == "ssh")    { return 22;   }
+		else if(m_scheme == "telnet") { return 23;   }
+		else if(m_scheme == "nntp")   { return 119;  }
+		else if(m_scheme == "ldap")   { return 389;  }
+		else if(m_scheme == "rtsp")   { return 554;  }
+		else if(m_scheme == "sip")    { return 5060; }
+		else if(m_scheme == "sips")   { return 5061; }
+		else if(m_scheme == "xmpp")   { return 5222; }
+	}
+	return 0;
 }
 
 std::string uri::to_string(bool show_creds) const
