@@ -48,16 +48,16 @@ mesos::mesos(const std::string& state_uri,
 							 "], failover autodiscovery set to ") +
 							(m_discover_mesos_leader ? "true" : "false"),
 				 sinsp_logger::SEV_DEBUG);
-#endif
-	// TODO: support multiple marathon frameworks
+
 	if(m_marathon_uris.size() > 1)
 	{
 		std::string marathon_uri = m_marathon_uris[0];
 		m_marathon_uris.clear();
 		m_marathon_uris.emplace_back(marathon_uri);
-		g_logger.log("Multiple marathon URIs specified; only the first one (" + marathon_uri + ") will have effect;"
-					" others will be treated as generic frameworks.", sinsp_logger::SEV_WARNING);
+		g_logger.log("Multiple root marathon URIs configured; only the first one (" + marathon_uri + ") will have effect;"
+					" others will be treated as generic frameworks (user Marathon frameworks will be discovered).", sinsp_logger::SEV_WARNING);
 	}
+#endif
 	init();
 }
 
@@ -76,7 +76,7 @@ void mesos::init()
 			throw sinsp_exception("Invalid access to Mesos initializer: mesos state http client for [" +
 								 m_mesos_uri + "] not unique.");
 		}
-		m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, false, m_timeout_ms);
+		m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, m_marathon_uris.empty(), m_timeout_ms);
 		rebuild_mesos_state(true);
 		init_marathon();
 	}
@@ -93,8 +93,10 @@ void mesos::init_marathon()
 
 		bool discover_marathon = m_marathon_uris.size() == 0;
 		const uri_list_t& marathons = discover_marathon ? m_state_http->get_marathon_uris() : m_marathon_uris;
+		g_logger.log("Found " + std::to_string(marathons.size()) + " Marathon URIs", sinsp_logger::SEV_DEBUG);
 		for(const auto& muri : marathons)
 		{
+			g_logger.log("Creating Marathon http objects: " + muri, sinsp_logger::SEV_INFO);
 			m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, discover_marathon, m_timeout_ms);
 			m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, discover_marathon, m_timeout_ms);
 		}
@@ -522,7 +524,7 @@ void mesos::handle_frameworks(const Json::Value& root)
 							{
 								g_logger.log("New or activated Mesos framework detected: " + name + " [" + uid.asString() + ']', sinsp_logger::SEV_INFO);
 								m_activated_frameworks.insert(uid.asString());
-								if(mesos_framework::is_marathon(name))
+								if(mesos_framework::is_root_marathon(name))
 								{
 									init_marathon();
 								}
