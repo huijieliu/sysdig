@@ -144,6 +144,8 @@ private:
 class mesos_framework : public mesos_component
 {
 public:
+	static const std::string MARATHON_ROOT_NAME;
+
 	typedef std::shared_ptr<mesos_framework> ptr_t;
 	typedef mesos_task::ptr_t task_ptr_t;
 	typedef std::unordered_map<std::string, task_ptr_t> task_map;
@@ -267,7 +269,7 @@ inline mesos_framework::task_ptr_t mesos_framework::get_task(const std::string& 
 
 inline bool mesos_framework::is_root_marathon(const std::string& name)
 {
-	return name == "marathon";
+	return name == MARATHON_ROOT_NAME;
 }
 
 //

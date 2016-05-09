@@ -25,7 +25,7 @@ public:
 	std::string get_groups(const std::string& group_id);
 
 private:
-	std::string   m_data;
+	std::string m_data;
 };
 
 #endif // HAS_CAPTURE

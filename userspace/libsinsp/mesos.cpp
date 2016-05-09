@@ -93,17 +93,20 @@ void mesos::init_marathon()
 
 		bool discover_marathon = m_marathon_uris.size() == 0;
 		const uri_list_t& marathons = discover_marathon ? m_state_http->get_marathon_uris() : m_marathon_uris;
-		g_logger.log("Found " + std::to_string(marathons.size()) + " Marathon URIs", sinsp_logger::SEV_DEBUG);
-		for(const auto& muri : marathons)
+		if(marathons.size())
 		{
-			g_logger.log("Creating Marathon http objects: " + muri, sinsp_logger::SEV_INFO);
-			m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, discover_marathon, m_timeout_ms);
-			m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, discover_marathon, m_timeout_ms);
-		}
+			g_logger.log("Found " + std::to_string(marathons.size()) + " Marathon URIs", sinsp_logger::SEV_DEBUG);
+			for(const auto& muri : marathons)
+			{
+				g_logger.log("Creating Marathon http objects: " + muri, sinsp_logger::SEV_INFO);
+				m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, discover_marathon, m_timeout_ms);
+				m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, discover_marathon, m_timeout_ms);
+			}
 
-		if(has_marathon())
-		{
-			rebuild_marathon_state(true);
+			if(has_marathon())
+			{
+				rebuild_marathon_state(true);
+			}
 		}
 	}
 #endif // HAS_CAPTURE
@@ -183,6 +186,22 @@ void mesos::rebuild_marathon_state(bool full)
 			connect_marathon();
 			send_marathon_data_request();
 			collect_data();
+		}
+		if(m_state_http)
+		{
+			const mesos_http::marathon_uri_t& marathon_uris = m_state_http->get_marathon_uris();
+			if(marathon_uris.size())
+			{
+				m_state.set_marathon_uri(marathon_uris[0]);
+			}
+			else
+			{
+				throw sinsp_exception("Marathon detected but Marathon URI not found.");
+			}
+		}
+		else
+		{
+			throw sinsp_exception("Mesos state HTTP client is null.");
 		}
 	}
 #endif // HAS_CAPTURE
