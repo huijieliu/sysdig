@@ -623,7 +623,7 @@ void k8s_event_t::update(const Json::Value& item, k8s_state_t& state)
 	time_t     epoch_time_s = 0;
 	string     event_name;
 	string     description;
-	severity_t severity;
+	severity_t severity = sinsp_logger::SEV_EVT_INFORMATION;
 	string     scope;
 	tag_map_t  tags;
 
