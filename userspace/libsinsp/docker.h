@@ -26,7 +26,7 @@ public:
 
 	static const int default_timeout_ms = 1000L;
 
-	docker(const std::string& url = "",
+	docker(std::string url = "",
 		const std::string& path = "/events",
 		const std::string& http_version = "1.0",
 		int timeout_ms = default_timeout_ms,
@@ -78,29 +78,16 @@ private:
 		return false;
 	}
 
-	bool is_container_event(const std::string& evt_name)
-	{
-		return m_container_events.find(evt_name) != m_container_events.end();
-	}
-	bool is_image_event(const std::string& evt_name)
-	{
-		return m_image_events.find(evt_name) != m_image_events.end();
-	}
-	bool is_volume_event(const std::string& evt_name)
-	{
-		return m_volume_events.find(evt_name) != m_volume_events.end();
-	}
-	bool is_network_event(const std::string& evt_name)
-	{
-		return m_network_events.find(evt_name) != m_network_events.end();
-	}
+	bool is_container_event(const std::string& evt_name);
+	bool is_image_event(const std::string& evt_name);
+	bool is_volume_event(const std::string& evt_name);
+	bool is_network_event(const std::string& evt_name);
 
 	typedef socket_data_handler<docker> handler_t;
 	typedef handler_t::ptr_t            handler_ptr_t;
 	typedef socket_collector<handler_t> collector_t;
 
 	std::string   m_id;
-	std::string   m_url;
 	handler_ptr_t m_event_http;
 	collector_t   m_collector;
 	std::string   m_event_uri;
@@ -161,6 +148,26 @@ inline const std::string& docker::translate_name(const std::string& event_name)
 		return it->second;
 	}
 	return event_name;
+}
+
+inline bool docker::is_container_event(const std::string& evt_name)
+{
+	return m_container_events.find(evt_name) != m_container_events.end();
+}
+
+inline bool docker::is_image_event(const std::string& evt_name)
+{
+	return m_image_events.find(evt_name) != m_image_events.end();
+}
+
+inline bool docker::is_volume_event(const std::string& evt_name)
+{
+	return m_volume_events.find(evt_name) != m_volume_events.end();
+}
+
+inline bool docker::is_network_event(const std::string& evt_name)
+{
+	return m_network_events.find(evt_name) != m_network_events.end();
 }
 
 #endif // __linux__

@@ -11,7 +11,7 @@
 
 const std::string docker::DOCKER_SOCKET_FILE = "/var/run/docker.sock";
 
-docker::docker(const std::string& url,
+docker::docker(std::string url,
 	const std::string& path,
 	const std::string& http_version,
 	int timeout_ms,
@@ -19,7 +19,6 @@ docker::docker(const std::string& url,
 	bool verbose,
 	event_filter_ptr_t event_filter): m_id("docker"),
 #ifdef HAS_CAPTURE
-		m_url(!url.empty() ? url : std::string(scap_get_host_root()) + DOCKER_SOCKET_FILE),
 		m_collector(false),
 #endif // HAS_CAPTURE
 		m_timeout_ms(timeout_ms),
@@ -78,12 +77,15 @@ docker::docker(const std::string& url,
 			// { "destroy"     "Destroyed"    } duplicate
 		}
 {
-#ifdef HAS_CAPTURE
 	g_logger.log(std::string("Creating Docker object for " +
-							(m_url.empty() ? std::string("capture replay") : m_url),
+							(url.empty() ? std::string("capture replay") : url),
 				 sinsp_logger::SEV_DEBUG));
-
-	m_event_http = std::make_shared<handler_t>(*this, "events", m_url, path, http_version, timeout_ms);
+#ifdef HAS_CAPTURE
+	if(url.empty())
+	{
+		url = std::string("file://").append(scap_get_host_root()).append(DOCKER_SOCKET_FILE);
+	}
+	m_event_http = std::make_shared<handler_t>(*this, "events", url, path, http_version, timeout_ms);
 	m_event_http->set_json_callback(&docker::set_event_json);
 	m_event_http->set_json_end("}\n");
 	m_collector.add(m_event_http);

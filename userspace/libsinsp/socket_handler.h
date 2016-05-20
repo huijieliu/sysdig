@@ -159,6 +159,7 @@ public:
 		std::string creds = url.get_credentials();
 		if(!creds.empty())
 		{
+			uri::decode(creds);
 			std::istringstream is(creds);
 			std::ostringstream os;
 			base64::encoder().encode(is, os);
