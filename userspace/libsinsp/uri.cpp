@@ -206,3 +206,8 @@ std::string uri::decode(const std::string& str, bool plus_as_space)
 	}
 	return decoded_str;
 }
+
+bool uri::is(const std::string& proto)
+{
+	return ci_compare::is_equal(m_scheme, proto);
+}

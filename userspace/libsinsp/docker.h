@@ -17,8 +17,6 @@
 class docker
 {
 public:
-	static const std::string DOCKER_SOCKET_FILE;
-
 	typedef std::vector<std::string> uri_list_t;
 	typedef std::shared_ptr<Json::Value> json_ptr_t;
 	typedef std::set<std::string, ci_compare> event_filter_t;
@@ -48,7 +46,10 @@ public:
 	void set_machine_id(const std::string& machine_id);
 	const std::string& get_machine_id() const;
 
+	static std::string get_socket_file();
+
 private:
+	static const std::string DOCKER_SOCKET_FILE;
 	void connect();
 	void send_event_data_request();
 	void check_collector_status(int expected);
@@ -95,28 +96,24 @@ private:
 
 private:
 
-	const std::string& translate_name(const std::string& event_name);
-
-	long               m_timeout_ms;
-	bool               m_is_captured;
-	bool               m_verbose;
-	event_filter_ptr_t m_event_filter;
-	std::string        m_machine_id;
-
 	typedef std::vector<json_ptr_t> event_list_t;
 	typedef sinsp_logger::event_severity severity_t;
 	typedef std::unordered_map<std::string, severity_t> severity_map_t;
-
-	event_list_t   m_events;
-	severity_map_t m_severity_map;
-
-	typedef std::set<std::string> entity_events_t;
-	const entity_events_t m_container_events;
-	const entity_events_t m_image_events;
-	const entity_events_t m_volume_events;
-	const entity_events_t m_network_events;
-
 	typedef std::unordered_map<std::string, std::string> name_translation_map_t;
+	typedef std::set<std::string> entity_events_t;
+	const std::string& translate_name(const std::string& event_name);
+
+	long                   m_timeout_ms;
+	bool                   m_is_captured;
+	bool                   m_verbose;
+	event_filter_ptr_t     m_event_filter;
+	std::string            m_machine_id;
+	event_list_t           m_events;
+	const entity_events_t  m_container_events;
+	const entity_events_t  m_image_events;
+	const entity_events_t  m_volume_events;
+	const entity_events_t  m_network_events;
+	severity_map_t         m_severity_map;
 	name_translation_map_t m_name_translation;
 };
 

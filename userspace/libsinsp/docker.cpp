@@ -32,6 +32,46 @@ docker::docker(std::string url,
 		m_image_events{"delete", "import", "pull", "push", "tag", "untag"},
 		m_volume_events{"create", "mount", "unmount", "destroy"},
 		m_network_events{"create", "connect", "disconnect", "destroy"},
+		m_severity_map
+		{
+			// container
+			{ "attach",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "commit",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "copy",        sinsp_logger::SEV_EVT_INFORMATION },
+			{ "create",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "destroy",     sinsp_logger::SEV_EVT_WARNING     },
+			{ "die",         sinsp_logger::SEV_EVT_WARNING     },
+			{ "exec_create", sinsp_logger::SEV_EVT_INFORMATION },
+			{ "exec_start",  sinsp_logger::SEV_EVT_INFORMATION },
+			{ "export",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "kill",        sinsp_logger::SEV_EVT_WARNING     },
+			{ "oom",         sinsp_logger::SEV_EVT_WARNING     },
+			{ "pause",       sinsp_logger::SEV_EVT_INFORMATION },
+			{ "rename",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "resize",      sinsp_logger::SEV_EVT_INFORMATION },
+			{ "restart",     sinsp_logger::SEV_EVT_WARNING     },
+			{ "start",       sinsp_logger::SEV_EVT_INFORMATION },
+			{ "stop",        sinsp_logger::SEV_EVT_INFORMATION },
+			{ "top",         sinsp_logger::SEV_EVT_INFORMATION },
+			{ "unpause",     sinsp_logger::SEV_EVT_INFORMATION },
+			{ "update",      sinsp_logger::SEV_EVT_INFORMATION },
+
+			// image
+			{ "delete", sinsp_logger::SEV_EVT_INFORMATION },
+			{ "import", sinsp_logger::SEV_EVT_INFORMATION },
+			{ "pull",   sinsp_logger::SEV_EVT_INFORMATION },
+			{ "push",   sinsp_logger::SEV_EVT_INFORMATION },
+			{ "tag",    sinsp_logger::SEV_EVT_INFORMATION },
+			{ "untag",  sinsp_logger::SEV_EVT_INFORMATION },
+
+			// volume
+			{ "mount",   sinsp_logger::SEV_EVT_INFORMATION },
+			{ "unmount", sinsp_logger::SEV_EVT_INFORMATION },
+
+			// network
+			{ "connect",    sinsp_logger::SEV_EVT_INFORMATION },
+			{ "disconnect", sinsp_logger::SEV_EVT_INFORMATION }
+		},
 		m_name_translation
 		{
 			// Container
@@ -78,56 +118,18 @@ docker::docker(std::string url,
 		}
 {
 	g_logger.log(std::string("Creating Docker object for " +
-							(url.empty() ? std::string("capture replay") : url),
-				 sinsp_logger::SEV_DEBUG));
+							(url.empty() ? std::string("capture replay") : url)),
+				 sinsp_logger::SEV_DEBUG);
 #ifdef HAS_CAPTURE
 	if(url.empty())
 	{
 		url = std::string("file://").append(scap_get_host_root()).append(DOCKER_SOCKET_FILE);
 	}
-	m_event_http = std::make_shared<handler_t>(*this, "events", url, path, http_version, timeout_ms);
+	m_event_http = std::make_shared<handler_t>(*this, "docker", url, path, http_version, timeout_ms);
 	m_event_http->set_json_callback(&docker::set_event_json);
 	m_event_http->set_json_end("}\n");
 	m_collector.add(m_event_http);
 	send_data_request();
-
-	// container
-	m_severity_map["attach"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["commit"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["copy"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["create"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["destroy"] = sinsp_logger::SEV_EVT_WARNING;
-	m_severity_map["die"] = sinsp_logger::SEV_EVT_WARNING;
-	m_severity_map["exec_create"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["exec_start"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["export"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["kill"] = sinsp_logger::SEV_EVT_WARNING;
-	m_severity_map["oom"] = sinsp_logger::SEV_EVT_WARNING;
-	m_severity_map["pause"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["rename"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["resize"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["restart"] = sinsp_logger::SEV_EVT_WARNING;
-	m_severity_map["start"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["stop"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["top"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["unpause"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["update"] = sinsp_logger::SEV_EVT_INFORMATION;
-
-	// image
-	m_severity_map["delete"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["import"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["pull"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["push"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["tag"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["untag"] = sinsp_logger::SEV_EVT_INFORMATION;
-
-	// volume
-	m_severity_map["mount"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["unmount"] = sinsp_logger::SEV_EVT_INFORMATION;
-
-	// network
-	m_severity_map["connect"] = sinsp_logger::SEV_EVT_INFORMATION;
-	m_severity_map["disconnect"] = sinsp_logger::SEV_EVT_INFORMATION;
 #endif
 }
 
@@ -389,6 +391,25 @@ void docker::handle_event(Json::Value&& root)
 			g_logger.log(Json::FastWriter().write(root), sinsp_logger::SEV_TRACE);
 		}
 	}
+}
+
+std::string docker::get_socket_file()
+{
+	string sock_file = scap_get_host_root();
+	std::string::size_type len = sock_file.length();
+	if(len && sock_file[len - 1] == '/')
+	{
+		if((len - 1) > 0)
+		{
+			sock_file = sock_file.substr(0, len - 1);
+		}
+		else
+		{
+			sock_file.clear();
+		}
+	}
+	sock_file.append(DOCKER_SOCKET_FILE);
+	return sock_file;
 }
 
 #endif // __linux__
