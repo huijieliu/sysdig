@@ -70,7 +70,7 @@ public:
 	json_query(const std::string& json = "", const std::string& filter = "", bool dbg = false);
 	~json_query();
 
-	void set_json(const std::string& json);	
+	void set_json(const std::string& json);
 	const std::string& get_json() const;
 
 	void set_filter(const std::string& filter);
@@ -86,39 +86,39 @@ private:
 	void cleanup();
 	void cleanup(jv& j, const std::string& msg = "");
 
-	jq_state*           _jq;
-	std::string         _json;
-	std::string         _filter;
-	std::string         _filtered_json;
-	jv                  _input;
-	jv                  _result;
-	bool                _processed;
-	mutable std::string _error;
+	jq_state*           m_jq;
+	std::string         m_json;
+	std::string         m_filter;
+	std::string         m_filtered_json;
+	jv                  m_input;
+	jv                  m_result;
+	bool                m_processed;
+	mutable std::string m_error;
 };
 
 inline void json_query::set_json(const std::string& json)
 {
-	_json = json;
+	m_json = json;
 }
 
 inline const std::string& json_query::get_json() const
 {
-	return _json;
+	return m_json;
 }
 
 inline void json_query::set_filter(const std::string& filter)
 {
-	_filter = filter;
+	m_filter = filter;
 }
 
 inline const std::string& json_query::get_filter() const
 {
-	return _filter;
+	return m_filter;
 }
 
 inline const std::string& json_query::get_error() const
 {
-	return _error;
+	return m_error;
 }
 
 #endif // __linux__
