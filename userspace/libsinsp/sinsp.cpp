@@ -549,6 +549,12 @@ void sinsp::close()
 		delete m_filter;
 		m_filter = NULL;
 	}
+
+	for (auto filter : m_evttype_filters)
+	{
+		delete filter;
+	}
+	m_evttype_filters.clear();
 #endif
 }
 
@@ -1351,6 +1357,41 @@ const string sinsp::get_filter()
 	return m_filterstring;
 }
 
+void sinsp::add_evttype_filter(list<uint16_t> evttypes,
+			       uint32_t check_id,
+			       sinsp_filter *filter)
+{
+	m_evttype_filters.push_back(filter);
+
+	for (auto evttype: evttypes)
+	{
+		pair<uint32_t,sinsp_filter *> val;
+		val.first=check_id;
+		val.second=filter;
+		m_filter_by_evttype.insert(multimap<uint16_t,pair<uint32_t,sinsp_filter *>>::value_type(evttype, val));
+	}
+}
+
+bool sinsp::run_filters_on_evt(sinsp_evt *evt)
+{
+	if (m_filter && m_filter->run(evt) == true)
+	{
+		return true;
+	}
+
+	auto range = m_filter_by_evttype.equal_range(evt->m_pevt->type);
+	for (auto kv = range.first; kv != range.second; kv++)
+	{
+		if (kv->second.second->run(evt) == true)
+		{
+			evt->set_check_id(kv->second.first);
+			return true;
+		}
+
+	}
+
+	return false;
+}
 #endif
 
 const scap_machine_info* sinsp::get_machine_info()

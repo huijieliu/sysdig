@@ -41,13 +41,25 @@ lua_parser::lua_parser(sinsp* inspector, lua_State *ls)
 
 }
 
-sinsp_filter* lua_parser::get_filter()
+sinsp_filter* lua_parser::get_filter(bool reset_filter)
 {
 	if (m_nest_level != 0)
 	{
 		throw sinsp_exception("Error in configured filter: unbalanced nesting");
 	}
-	return m_filter;
+
+	sinsp_filter *ret = m_filter;
+
+	if (reset_filter)
+	{
+		m_have_rel_expr = false;
+		m_last_boolop = BO_NONE;
+		m_nest_level = 0;
+
+		m_filter = new sinsp_filter(m_inspector);
+	}
+
+	return ret;
 }
 lua_parser::~lua_parser()
 {

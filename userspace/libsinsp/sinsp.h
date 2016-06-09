@@ -349,6 +349,12 @@ public:
 	   string if no filter has been set yet.
 	*/
 	const string get_filter();
+
+	void add_evttype_filter(list<uint16_t> evttypes,
+				uint32_t rule_id,
+				sinsp_filter* filter);
+
+	bool run_filters_on_evt(sinsp_evt *evt);
 #endif
 
 	/*!
@@ -849,6 +855,9 @@ private:
 	uint64_t m_firstevent_ts;
 	sinsp_filter* m_filter;
 	string m_filterstring;
+
+	multimap<uint16_t,pair<uint32_t,sinsp_filter *>> m_filter_by_evttype;
+	list<sinsp_filter *> m_evttype_filters;
 #endif
 
 	//
