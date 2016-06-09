@@ -345,7 +345,7 @@ public:
 	/*!
 	  \brief Return the filter set for this capture.
 
-	  \return the filter previously set with \ref set_filter(), or an empty 
+	  \return the filter previously set with \ref set_filter(), or an empty
 	   string if no filter has been set yet.
 	*/
 	const string get_filter();
