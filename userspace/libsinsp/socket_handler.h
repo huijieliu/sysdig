@@ -19,6 +19,8 @@
 #define _GNU_SOURCE
 #endif
 #include <netdb.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
 #include <iostream>
@@ -63,13 +65,17 @@ public:
 		m_request(make_request(m_url, http_version)),
 		m_http_version(http_version),
 		m_json_begin("\r\n{"),
-		m_json_end(m_http_version == HTTP_VERSION_10 ? "}\r\n" : "}\r\n0")
+		m_json_end(m_http_version == HTTP_VERSION_10 ? "}\r\n" : "}\r\n0"),
+		m_ssl_context(0),
+		m_ssl_connection(0),
+		m_content_length(std::string::npos)
 	{
 	}
 
 	virtual ~socket_data_handler()
 	{
 		cleanup();
+		SSL_CTX_free(m_ssl_context);
 	}
 
 	virtual int get_socket(long timeout_ms = -1)
@@ -150,6 +156,11 @@ public:
 		m_json_callback = f;
 	}
 
+	SSL* ssl_connection()
+	{
+		return m_ssl_connection;
+	}
+
 	void send_request()
 	{
 		if(m_request.empty())
@@ -162,16 +173,79 @@ public:
 			throw sinsp_exception("Socket handler (" + m_id + ") send: invalid socket.");
 		}
 
-		size_t iolen = send(m_watch_socket, m_request.c_str(), m_request.size(), 0);
-		if((iolen <= 0) || (m_request.size() != iolen))
+		int iolen = 0;
+		if(m_request.size())
 		{
-			throw sinsp_exception("Socket handler (" + m_id + ") send: socket connection error.");
+			std::string req = m_request;
+			time_t then; time(&then);
+			while(req.size())
+			{
+				if(m_url.is_secure())
+				{
+					iolen = SSL_write(m_ssl_connection, m_request.c_str(), m_request.size());
+				}
+				else
+				{
+					iolen = send(m_watch_socket, m_request.c_str(), m_request.size(), 0);
+				}
+				if(iolen == req.size()) { break; }
+				else if(iolen == 0 || errno == ENOTCONN || errno == EPIPE)
+				{
+					goto connection_closed;
+				}
+				else if(iolen < 0)
+				{
+					if(errno == ENOTCONN || errno == EPIPE)
+					{
+						goto connection_closed;
+					}
+					else if(errno != EAGAIN && errno != EWOULDBLOCK)
+					{
+						goto connection_error;
+					}
+					if(m_url.is_secure())
+					{
+						int err = SSL_get_error(m_ssl_connection, iolen);
+						if(err != SSL_ERROR_WANT_WRITE && err != SSL_ERROR_WANT_READ)
+						{
+							goto connection_error;
+						}
+					}
+				}
+				else { req.erase(0, iolen); }
+				time_t now; time(&now);
+				if(difftime(now, then) > m_timeout_ms * 1000)
+				{
+					throw sinsp_exception("Socket handler (" + m_id + "): send timeout.");
+				}
+			}
 		}
-		else if(!wait(1))
+		else
 		{
-			throw sinsp_exception("Socket handler (" + m_id + ") send: timeout.");
+			throw sinsp_exception("Socket handler (" + m_id + ") request is empty.");
 		}
-		g_logger.log(m_request, sinsp_logger::SEV_DEBUG);
+		g_logger.log(m_request, sinsp_logger::SEV_TRACE);
+		return;
+
+		connection_error:
+		{
+			std::string err = strerror(errno);
+			g_logger.log("Socket handler (" + m_id + ") connection [" + m_url.to_string() + "] error : " + err, sinsp_logger::SEV_ERROR);
+			if(m_url.is_secure())
+			{
+				std::string ssl_err = ssl_errors();
+				if(!ssl_err.empty())
+				{
+					g_logger.log(ssl_err, sinsp_logger::SEV_ERROR);
+				}
+			}
+			throw sinsp_exception("Socket handler (" + m_id + ") send error.");
+		}
+
+		connection_closed:
+		{
+			throw sinsp_exception("Socket handler (" + m_id + ") connection [" + m_url.to_string() + "] closed.");
+		}
 	}
 
 	bool on_data()
@@ -200,13 +274,41 @@ public:
 					{
 						buf.resize(count);
 					}
-					iolen = recv(m_watch_socket, &buf[0], count, 0);
+					if(m_url.is_secure())
+					{
+						iolen = SSL_read(m_ssl_connection, &buf[0], count);
+					}
+					else
+					{
+						iolen = recv(m_watch_socket, &buf[0], count, 0);
+					}
 					if(iolen > 0)
 					{
 						data.append(&buf[0], iolen <= buf.size() ? iolen : buf.size());
 					}
-					else if(iolen == 0) { goto connection_closed; }
-					else if(iolen < 0) { goto connection_error; }
+					else if(iolen == 0 || errno == ENOTCONN || errno == EPIPE)
+					{
+						goto connection_closed;
+					}
+					else if(iolen < 0)
+					{
+						if(errno == ENOTCONN || errno == EPIPE)
+						{
+							goto connection_closed;
+						}
+						else if(errno != EAGAIN && errno != EWOULDBLOCK)
+						{
+							goto connection_error;
+						}
+						if(m_url.is_secure())
+						{
+							int err = SSL_get_error(m_ssl_connection, iolen);
+							if(err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+							{
+								goto connection_error;
+							}
+						}
+					}
 				}
 				else
 				{
@@ -231,12 +333,20 @@ public:
 	connection_error:
 	{
 		std::string err = strerror(errno);
-		g_logger.log("Socket handler connection [" + m_url.to_string() + "] error : " + err, sinsp_logger::SEV_ERROR);
+		g_logger.log("Socket handler (" + m_id + ") connection [" + m_url.to_string() + "] error : " + err, sinsp_logger::SEV_ERROR);
+		if(m_url.is_secure())
+		{
+			std::string ssl_err = ssl_errors();
+			if(!ssl_err.empty())
+			{
+				g_logger.log("Socket handler (" + m_id + ") SSL error : " + ssl_err, sinsp_logger::SEV_ERROR);
+			}
+		}
 		return false;
 	}
 
 	connection_closed:
-		g_logger.log("Socket handler connection [" + m_url.to_string() + "] closed.", sinsp_logger::SEV_ERROR);
+		g_logger.log("Socket handler (" + m_id + ") connection [" + m_url.to_string() + "] closed.", sinsp_logger::SEV_ERROR);
 		m_connected = false;
 		return false;
 	}
@@ -271,7 +381,8 @@ public:
 		m_json_filter = filter;
 	}
 
-	static json_ptr_t try_parse(json_query& jq, std::string&& json, const std::string& filter)
+	static json_ptr_t try_parse(json_query& jq, std::string&& json, const std::string& filter,
+								const std::string& id, const std::string& url)
 	{
 		if(!filter.empty())
 		{
@@ -279,14 +390,11 @@ public:
 			{
 				json = jq.result();
 			}
-			else // we must throw here, because client expects filtered json
+			else
 			{
-				if(g_logger.get_severity() >= sinsp_logger::SEV_DEBUG)
-				{
-					g_logger.log("Socket handler JSON: <" + json + ">, jq filter: <" + filter + '>',
-							 sinsp_logger::SEV_DEBUG);
-				}
-				throw sinsp_exception("Socket handler: filtering JSON failed.");
+				g_logger.log("Socket handler (" + id + "), [" + url + "] parsing error; JSON: <" + json + ">, jq filter: <" + filter + '>',
+							 sinsp_logger::SEV_ERROR);
+				return nullptr;
 			}
 		}
 		json_ptr_t root(new Json::Value());
@@ -298,10 +406,19 @@ public:
 			}
 		}
 		catch(...) { }
+		g_logger.log("Socket handler (" + id + "), [" + url + "] parsing error; JSON: <" + json + ">, jq filter: <" + filter + '>',
+					 sinsp_logger::SEV_ERROR);
 		return nullptr;
 	}
 
 private:
+
+	typedef struct
+	{
+		int verbose_mode;
+		int verify_depth;
+		int always_continue;
+	} ssl_verify_data_t;
 
 	bool purge_chunked_markers(std::string& data)
 	{
@@ -353,7 +470,7 @@ private:
 					}
 					else
 					{
-						(m_obj.*m_json_callback)(try_parse(m_jq, std::move(json), m_json_filter), m_id);
+						(m_obj.*m_json_callback)(try_parse(m_jq, std::move(json), m_json_filter, m_id, m_url.to_string(false)), m_id);
 					}
 				}
 				
@@ -454,6 +571,144 @@ private:
 		return select(m_watch_socket + 1, &infd, &outfd, &errfd, &tv);
 	}
 
+	static int ssl_verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
+	{
+		char      buf[256] = {0};
+		X509*     err_cert = X509_STORE_CTX_get_current_cert(ctx);
+		int       err = X509_STORE_CTX_get_error(ctx);
+		int       depth = X509_STORE_CTX_get_error_depth(ctx);
+
+		// Retrieve the pointer to the SSL of the connection currently treated
+		// and the application specific data stored into the SSL object.
+		SSL* ssl = (SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+		ssl_verify_data_t* m_ssl_verify_data = (ssl_verify_data_t*)SSL_get_ex_data(ssl, m_ssl_verify_data_idx);
+
+		X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+
+		// Catch a too long certificate chain. The depth limit set using
+		// SSL_CTX_set_verify_depth() is by purpose set to "limit+1" so
+		// that whenever the "depth>verify_depth" condition is met, we
+		// have violated the limit and want to log this error condition.
+		// We must do it here, because the CHAIN_TOO_LONG error would not
+		// be found explicitly; only errors introduced by cutting off the
+		// additional certificates would be logged.
+		if(depth > m_ssl_verify_data->verify_depth)
+		{
+			preverify_ok = 0;
+			err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+			X509_STORE_CTX_set_error(ctx, err);
+		}
+		if(!preverify_ok)
+		{
+			printf("verify error:num=%d:%s:depth=%d:%s\n", err,
+					X509_verify_cert_error_string(err), depth, buf);
+		}
+		else if(m_ssl_verify_data->verbose_mode)
+		{
+			printf("depth=%d:%s\n", depth, buf);
+		}
+
+		// At this point, err contains the last verification error. We can use
+		// it for something special
+		if(!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT))
+		{
+			X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, 256);
+			printf("issuer= %s\n", buf);
+		}
+		if(m_ssl_verify_data->always_continue) { return 1; }
+
+		 return preverify_ok;
+	}
+
+	std::string ssl_errors()
+	{
+		std::ostringstream os;
+		if(m_url.is_secure())
+		{
+			char errbuf[256] = {0};
+			unsigned long err;
+			while((err = ERR_get_error()) != 0)
+			{
+				if(os.str().empty())
+				{
+					os << "Socket handler (" + m_id + ") SSL errors:\n";
+				}
+				os << ERR_error_string(err, errbuf) << std::endl;
+			}
+		}
+		return os.str();
+	}
+
+	void init_ssl_context(void)
+	{
+		if(!m_ssl_context)
+		{
+			SSL_library_init();
+			SSL_load_error_strings();
+			OpenSSL_add_all_algorithms();
+			const SSL_METHOD* method = TLSv1_2_client_method(); // SSLv23_method();
+			if(!method)
+			{
+				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
+			}
+			m_ssl_context = SSL_CTX_new(method);
+			if(!m_ssl_context)
+			{
+				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
+			}
+
+			m_ssl_verify_data_idx = SSL_get_ex_new_index(0, (void*)"m_ssl_verify_data index", NULL, NULL, NULL);
+			if(m_ssl && m_ssl->verify_peer())
+			{
+				// The server certificate is verified. If the verification process fails,
+				// the TLS/SSL handshake is immediately terminated with a log message
+				// containing the reason for the verification failure.
+				SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_PEER, ssl_verify_callback);
+			}
+			else
+			{
+				// The result of the certificate verification process can be checked
+				// after the TLS/SSL handshake using the SSL_get_verify_result function.
+				// The handshake will be continued regardless of the verification result.
+				SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_NONE, ssl_verify_callback);
+			}
+			SSL_set_ex_data(m_ssl_connection, m_ssl_verify_data_idx, &m_ssl_verify_data);
+		}
+	}
+
+	void init_ssl_socket()
+	{
+		if(m_watch_socket != -1)
+		{
+			if(m_url.is_secure())
+			{
+				if(!m_ssl_context) { init_ssl_context(); }
+				if(m_ssl_context)
+				{
+					m_ssl_connection = SSL_new(m_ssl_context);
+					if(m_ssl_connection)
+					{
+						if(0 == SSL_set_fd(m_ssl_connection, m_watch_socket))
+						{
+							throw sinsp_exception("Socket handler " + m_id + " (" + m_url.to_string(false) + ") "
+							  "error assigning socket to SSL connection: " + ssl_errors());
+						}
+					}
+					else
+					{
+						throw sinsp_exception("Socket handler " + m_id + " (" + m_url.to_string(false) + ") "
+							  "error obtaining socket: " + ssl_errors());
+					}
+				}
+				else
+				{
+					throw sinsp_exception("Socket handler " + m_id + " (" + m_url.to_string(false) + ") "
+						  "SSL context error : " + ssl_errors());
+				}
+			}
+		}
+	}
+
 	void create_socket()
 	{
 		if(m_watch_socket < 0)
@@ -464,7 +719,7 @@ private:
 			}
 			else
 			{
-				m_watch_socket = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+				m_watch_socket = socket(PF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 			}
 			if(m_watch_socket < 0)
 			{
@@ -493,7 +748,7 @@ private:
 			sa = (sockaddr*)&file_addr;
 			sa_len = sizeof(struct sockaddr_un);
 		}
-		else if(m_url.is("http"))
+		else if(m_url.is("https") || m_url.is("http"))
 		{
 			if(!inet_aton(m_url.get_host().c_str(), &serv_addr.sin_addr))
 			{
@@ -538,10 +793,23 @@ private:
 			std::string addr_str = (m_url.is_file() ? m_url.get_path().c_str() : inet_ntoa(serv_addr.sin_addr));
 			g_logger.log("Socket handler (" + m_id + ") connecting to " + addr_str, sinsp_logger::SEV_INFO);
 			connect(m_watch_socket, sa, sa_len);
+			if(m_url.is_secure())
+			{
+				init_ssl_socket();
+				if(m_ssl_connection)
+				{
+					SSL_connect(m_ssl_connection);
+				}
+				else
+				{
+					throw sinsp_exception("Socket handler (" + m_id + "): " + addr_str +
+									  " SSL connection is null (" + strerror(errno) + ')');
+				}
+			}
 			time_t then; time(&then);
 			while(wait(false, 10L) == -1)
 			{
-				g_logger.log("Socket handler: waiting for connection to " + addr_str, sinsp_logger::SEV_DEBUG);
+				g_logger.log("Socket handler (" + m_id + "): waiting for connection to " + addr_str, sinsp_logger::SEV_DEBUG);
 				time_t now; time(&now);
 				if(difftime(now, then) > m_timeout_ms * 1000)
 				{
@@ -549,14 +817,17 @@ private:
 									  " timed out waiting for connection.");
 				}
 			}
-			int arg = 0;
-			if(ioctl(m_watch_socket, FIONBIO, &arg) == -1)
+			g_logger.log("Socket handler (" + m_id + "): Connected: socket=" + std::to_string(m_watch_socket) +
+						 ", collecting data from " + m_url.to_string(false), sinsp_logger::SEV_INFO);
+
+			if(SSL_get_peer_certificate(m_ssl_connection))
 			{
-				throw sinsp_exception("Socket handler (" + m_id + "): " + addr_str +
-									  " error setting socket to blocking mode (" + strerror(errno) + ')');
+				if(SSL_get_verify_result(m_ssl_connection) != X509_V_OK)
+				{
+					throw sinsp_exception("Socket handler (" + m_id + "): " + addr_str +
+										  " server certificate verification failed.");
+				}
 			}
-			g_logger.log("Socket handler (" + m_id + "): Connected: collecting data from " +
-						m_url.to_string(false), sinsp_logger::SEV_INFO);
 		}
 		else
 		{
@@ -569,32 +840,43 @@ private:
 		if(m_watch_socket)
 		{
 			close(m_watch_socket);
+			m_watch_socket = -1;
+			SSL_free(m_ssl_connection);
+			m_ssl_connection = 0;
 		}
 	}
 
-	T&                      m_obj;
-	std::string             m_id;
-	uri                     m_url;
-	std::string             m_path;
-	bool                    m_connected;
-	int                     m_watch_socket;
-	ssl_ptr_t               m_ssl;
-	bt_ptr_t                m_bt;
-	long                    m_timeout_ms;
-	json_callback_func_t    m_json_callback;
-	std::string             m_data_buf;
-	std::string             m_request;
-	std::string             m_http_version;
-	std::string             m_json_begin;
-	std::string             m_json_end;
-	std::string             m_json_filter;
-	json_query              m_jq;
-	std::string::size_type  m_content_length = std::string::npos;
+	T&                       m_obj;
+	std::string              m_id;
+	uri                      m_url;
+	std::string              m_path;
+	bool                     m_connected;
+	int                      m_watch_socket;
+	ssl_ptr_t                m_ssl;
+	bt_ptr_t                 m_bt;
+	long                     m_timeout_ms;
+	json_callback_func_t     m_json_callback;
+	std::string              m_data_buf;
+	std::string              m_request;
+	std::string              m_http_version;
+	std::string              m_json_begin;
+	std::string              m_json_end;
+	std::string              m_json_filter;
+	json_query               m_jq;
+	SSL_CTX*                 m_ssl_context;
+	SSL*                     m_ssl_connection;
+	static ssl_verify_data_t m_ssl_verify_data;
+	static int               m_ssl_verify_data_idx;
+	std::string::size_type   m_content_length;
 };
 
 template <typename T>
 const std::string socket_data_handler<T>::HTTP_VERSION_10 = "1.0";
 template <typename T>
 const std::string socket_data_handler<T>::HTTP_VERSION_11 = "1.1";
+template <typename T>
+typename socket_data_handler<T>::ssl_verify_data_t socket_data_handler<T>::m_ssl_verify_data = {0};
+template <typename T>
+int socket_data_handler<T>::m_ssl_verify_data_idx = 0;
 
 #endif // HAS_CAPTURE
