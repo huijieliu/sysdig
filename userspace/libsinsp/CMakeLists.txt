@@ -9,6 +9,7 @@ if(NOT WIN32 AND NOT APPLE)
 	include_directories("${CURL_INCLUDE_DIR}")
 	include_directories("${CURSES_INCLUDE_DIR}")
 	include_directories("${JQ_INCLUDE}")
+	include_directories("${OPENSSL_INCLUDE_DIR}")
 endif()
 
 add_library(sinsp STATIC

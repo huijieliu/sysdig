@@ -295,6 +295,7 @@ if(NOT WIN32 AND NOT APPLE)
 	else()
 		set(OPENSSL_BUNDLE_DIR "${PROJECT_BINARY_DIR}/openssl-prefix/src/openssl")
 		set(OPENSSL_INSTALL_DIR "${OPENSSL_BUNDLE_DIR}/target")
+		set(OPENSSL_INCLUDE_DIR "${PROJECT_BINARY_DIR}/openssl-prefix/src/openssl/include")
 		set(OPENSSL_LIBRARY_SSL "${OPENSSL_INSTALL_DIR}/lib/libssl.a")
 		set(OPENSSL_LIBRARY_CRYPTO "${OPENSSL_INSTALL_DIR}/lib/libcrypto.a")
 
