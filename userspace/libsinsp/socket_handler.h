@@ -392,7 +392,7 @@ public:
 			}
 			else
 			{
-				g_logger.log("Socket handler (" + id + "), [" + url + "] parsing error; JSON: <" + json + ">, jq filter: <" + filter + '>',
+				g_logger.log("Socket handler (" + id + "), [" + url + "] parsing error; " + json + ", jq filter: <" + filter + '>',
 							 sinsp_logger::SEV_ERROR);
 				return nullptr;
 			}
@@ -413,12 +413,7 @@ public:
 
 private:
 
-	typedef struct
-	{
-		int verbose_mode;
-		int verify_depth;
-		int always_continue;
-	} ssl_verify_data_t;
+	typedef std::vector<char> password_vec_t;
 
 	bool purge_chunked_markers(std::string& data)
 	{
@@ -573,51 +568,43 @@ private:
 
 	static int ssl_verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 	{
-		char      buf[256] = {0};
-		X509*     err_cert = X509_STORE_CTX_get_current_cert(ctx);
-		int       err = X509_STORE_CTX_get_error(ctx);
-		int       depth = X509_STORE_CTX_get_error_depth(ctx);
-
-		// Retrieve the pointer to the SSL of the connection currently treated
-		// and the application specific data stored into the SSL object.
 		SSL* ssl = (SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-		ssl_verify_data_t* m_ssl_verify_data = (ssl_verify_data_t*)SSL_get_ex_data(ssl, m_ssl_verify_data_idx);
-
-		X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
-
-		// Catch a too long certificate chain. The depth limit set using
-		// SSL_CTX_set_verify_depth() is by purpose set to "limit+1" so
-		// that whenever the "depth>verify_depth" condition is met, we
-		// have violated the limit and want to log this error condition.
-		// We must do it here, because the CHAIN_TOO_LONG error would not
-		// be found explicitly; only errors introduced by cutting off the
-		// additional certificates would be logged.
-		if(depth > m_ssl_verify_data->verify_depth)
+		if(ssl)
 		{
-			preverify_ok = 0;
-			err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
-			X509_STORE_CTX_set_error(ctx, err);
-		}
-		if(!preverify_ok)
-		{
-			printf("verify error:num=%d:%s:depth=%d:%s\n", err,
-					X509_verify_cert_error_string(err), depth, buf);
-		}
-		else if(m_ssl_verify_data->verbose_mode)
-		{
-			printf("depth=%d:%s\n", depth, buf);
-		}
+			char      buf[256] = {0};
+			X509*     err_cert = X509_STORE_CTX_get_current_cert(ctx);
+			X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
 
-		// At this point, err contains the last verification error. We can use
-		// it for something special
-		if(!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT))
-		{
-			X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, 256);
-			printf("issuer= %s\n", buf);
+			if(preverify_ok && SSL_get_verify_result(ssl) == X509_V_OK)
+			{
+				g_logger.log("Socket handler SSL CA verified: " + std::string(buf), sinsp_logger::SEV_INFO);
+				return 1;
+			}
+			else
+			{
+				int err = X509_STORE_CTX_get_error(ctx);
+				int depth = X509_STORE_CTX_get_error_depth(ctx);
+				g_logger.log("SSL CA verify error:num=" + std::to_string(err) +
+							 ':' + X509_verify_cert_error_string(err) +
+							 ":depth=" + std::to_string(depth) +
+							 ':' + std::string(buf), sinsp_logger::SEV_ERROR);
+				return 0;
+			}
 		}
-		if(m_ssl_verify_data->always_continue) { return 1; }
+		return 0;
+	}
 
-		 return preverify_ok;
+	static int ssl_key_password_cb(char *buf, int size, int, void* pass)
+	{
+		if(pass)
+		{
+			std::memset(buf, 0, size);
+			std::size_t pass_len = strlen((char*)pass);
+			if(size < (pass_len + 1)) { return 0; }
+			strncpy(buf, (const char*)pass, pass_len);
+			return pass_len;
+		}
+		return 0;
 	}
 
 	std::string ssl_errors()
@@ -649,30 +636,84 @@ private:
 			const SSL_METHOD* method = TLSv1_2_client_method(); // SSLv23_method();
 			if(!method)
 			{
-				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
+				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL method\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
 			}
 			m_ssl_context = SSL_CTX_new(method);
 			if(!m_ssl_context)
 			{
-				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
+				g_logger.log("Socket handler (" + m_id + "): Can't initalize SSL context\n" + ssl_errors(), sinsp_logger::SEV_ERROR);
+				return;
 			}
 
-			m_ssl_verify_data_idx = SSL_get_ex_new_index(0, (void*)"m_ssl_verify_data index", NULL, NULL, NULL);
-			if(m_ssl && m_ssl->verify_peer())
+			if(m_ssl)
 			{
-				// The server certificate is verified. If the verification process fails,
-				// the TLS/SSL handshake is immediately terminated with a log message
-				// containing the reason for the verification failure.
-				SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_PEER, ssl_verify_callback);
+				if(m_ssl->verify_peer())
+				{
+					const std::string ca_cert = m_ssl->ca_cert();
+					if(!ca_cert.empty() && !SSL_CTX_load_verify_locations(m_ssl_context, ca_cert.c_str(), 0))
+					{
+						throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "Can't load SSL CA certificate (" + ca_cert + ").\n" +
+											  ssl_errors());
+					}
+					else if(ca_cert.empty())
+					{
+						throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "Invalid SSL CA certificate configuration (Verify Peer enabled but no CA certificate specified).");
+					}
+					// The server certificate is verified. If the verification process fails,
+					// the TLS/SSL handshake is immediately terminated with a log message
+					// containing the reason for the verification failure.
+					SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_PEER, ssl_verify_callback);
+				}
+				else
+				{
+					// The result of the certificate verification process can be checked
+					// after the TLS/SSL handshake using the SSL_get_verify_result function.
+					// The handshake will be continued regardless of the verification result.
+					SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_NONE, ssl_verify_callback);
+				}
+
+				const std::string& cert = m_ssl->cert();
+				if(!cert.empty())
+				{
+					if(SSL_CTX_use_certificate_file(m_ssl_context, cert.c_str(), SSL_FILETYPE_PEM) <= 0)
+					{
+						throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "Can't load SSL certificate  from " + cert + ".\n" +
+											  ssl_errors());
+					}
+					const std::string& key = m_ssl->key();
+					if(!key.empty())
+					{
+						const std::string& pass = m_ssl->key_passphrase();
+						if(!pass.empty())
+						{
+							m_ssl_key_pass.assign(pass.begin(), pass.end());
+							m_ssl_key_pass.push_back('\0');
+							SSL_CTX_set_default_passwd_cb_userdata(m_ssl_context, (void*)&m_ssl_key_pass[0]);
+							SSL_CTX_set_default_passwd_cb(m_ssl_context, ssl_key_password_cb);
+						}
+						if(SSL_CTX_use_PrivateKey_file(m_ssl_context, key.c_str(), SSL_FILETYPE_PEM) <= 0)
+						{
+							throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "Can't load SSL private key from " + key + ".\n" +
+											  ssl_errors());
+						}
+						if(!SSL_CTX_check_private_key(m_ssl_context))
+						{
+							throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "SSL private key (" + key + ") does not match public certificate (" + cert + ").\n" +
+											  ssl_errors());
+						}
+					}
+					else
+					{
+						throw sinsp_exception("Socket handler (" + m_id + "): "
+											  "Invalid SSL configuration: public certificate specified without private key.");
+					}
+				}
 			}
-			else
-			{
-				// The result of the certificate verification process can be checked
-				// after the TLS/SSL handshake using the SSL_get_verify_result function.
-				// The handshake will be continued regardless of the verification result.
-				SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_NONE, ssl_verify_callback);
-			}
-			SSL_set_ex_data(m_ssl_connection, m_ssl_verify_data_idx, &m_ssl_verify_data);
 		}
 	}
 
@@ -846,37 +887,32 @@ private:
 		}
 	}
 
-	T&                       m_obj;
-	std::string              m_id;
-	uri                      m_url;
-	std::string              m_path;
-	bool                     m_connected;
-	int                      m_watch_socket;
-	ssl_ptr_t                m_ssl;
-	bt_ptr_t                 m_bt;
-	long                     m_timeout_ms;
-	json_callback_func_t     m_json_callback;
-	std::string              m_data_buf;
-	std::string              m_request;
-	std::string              m_http_version;
-	std::string              m_json_begin;
-	std::string              m_json_end;
-	std::string              m_json_filter;
-	json_query               m_jq;
-	SSL_CTX*                 m_ssl_context;
-	SSL*                     m_ssl_connection;
-	static ssl_verify_data_t m_ssl_verify_data;
-	static int               m_ssl_verify_data_idx;
-	std::string::size_type   m_content_length;
+	T&                     m_obj;
+	std::string            m_id;
+	uri                    m_url;
+	std::string            m_path;
+	bool                   m_connected;
+	int                    m_watch_socket;
+	ssl_ptr_t              m_ssl;
+	bt_ptr_t               m_bt;
+	long                   m_timeout_ms;
+	json_callback_func_t   m_json_callback;
+	std::string            m_data_buf;
+	std::string            m_request;
+	std::string            m_http_version;
+	std::string            m_json_begin;
+	std::string            m_json_end;
+	std::string            m_json_filter;
+	json_query             m_jq;
+	SSL_CTX*               m_ssl_context;
+	SSL*                   m_ssl_connection;
+	password_vec_t         m_ssl_key_pass;
+	std::string::size_type m_content_length;
 };
 
 template <typename T>
 const std::string socket_data_handler<T>::HTTP_VERSION_10 = "1.0";
 template <typename T>
 const std::string socket_data_handler<T>::HTTP_VERSION_11 = "1.1";
-template <typename T>
-typename socket_data_handler<T>::ssl_verify_data_t socket_data_handler<T>::m_ssl_verify_data = {0};
-template <typename T>
-int socket_data_handler<T>::m_ssl_verify_data_idx = 0;
 
 #endif // HAS_CAPTURE
