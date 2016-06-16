@@ -351,7 +351,6 @@ public:
 	const string get_filter();
 
 	void add_evttype_filter(list<uint16_t> evttypes,
-				uint32_t rule_id,
 				sinsp_filter* filter);
 
 	bool run_filters_on_evt(sinsp_evt *evt);
@@ -856,7 +855,10 @@ private:
 	sinsp_filter* m_filter;
 	string m_filterstring;
 
-	multimap<uint16_t,pair<uint32_t,sinsp_filter *>> m_filter_by_evttype;
+	// Maps from event type to filter. There can be multiple
+	// filters per event type.
+	list<sinsp_filter *> *m_filter_by_evttype[PPM_EVENT_MAX];
+
 	list<sinsp_filter *> m_evttype_filters;
 #endif
 

@@ -1358,17 +1358,20 @@ const string sinsp::get_filter()
 }
 
 void sinsp::add_evttype_filter(list<uint16_t> evttypes,
-			       uint32_t check_id,
 			       sinsp_filter *filter)
 {
 	m_evttype_filters.push_back(filter);
 
 	for (auto evttype: evttypes)
 	{
-		pair<uint32_t,sinsp_filter *> val;
-		val.first=check_id;
-		val.second=filter;
-		m_filter_by_evttype.insert(multimap<uint16_t,pair<uint32_t,sinsp_filter *>>::value_type(evttype, val));
+		list<sinsp_filter *> *filters = m_filter_by_evttype[evttype];
+		if (filters == NULL)
+		{
+			filters = new list<sinsp_filter*>();
+			m_filter_by_evttype[evttype] = filters;
+		}
+
+		filters->push_back(filter);
 	}
 }
 
@@ -1379,15 +1382,17 @@ bool sinsp::run_filters_on_evt(sinsp_evt *evt)
 		return true;
 	}
 
-	auto range = m_filter_by_evttype.equal_range(evt->m_pevt->type);
-	for (auto kv = range.first; kv != range.second; kv++)
-	{
-		if (kv->second.second->run(evt) == true)
-		{
-			evt->set_check_id(kv->second.first);
-			return true;
-		}
+        list<sinsp_filter *> *filters = m_filter_by_evttype[evt->m_pevt->type];
 
+	if (filters)
+	{
+		for (sinsp_filter *filt : *filters)
+		{
+			if (filt->run(evt) == true)
+			{
+				return true;
+			}
+		}
 	}
 
 	return false;
