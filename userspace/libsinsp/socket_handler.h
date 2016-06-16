@@ -70,6 +70,7 @@ public:
 		m_ssl_connection(0),
 		m_content_length(std::string::npos)
 	{
+		g_logger.log(std::string("Creating Socket handler object for (" + id + ") [" + url + ']'), sinsp_logger::SEV_DEBUG);
 	}
 
 	virtual ~socket_data_handler()
@@ -594,6 +595,12 @@ private:
 		return 0;
 	}
 
+	static int ssl_verify_callback_ignore(int, X509_STORE_CTX*)
+	{
+		g_logger.log("Socket handler SSL CA verification disabled.", sinsp_logger::SEV_INFO);
+		return 1;
+	}
+
 	static int ssl_key_password_cb(char *buf, int size, int, void* pass)
 	{
 		if(pass)
@@ -661,17 +668,11 @@ private:
 						throw sinsp_exception("Socket handler (" + m_id + "): "
 											  "Invalid SSL CA certificate configuration (Verify Peer enabled but no CA certificate specified).");
 					}
-					// The server certificate is verified. If the verification process fails,
-					// the TLS/SSL handshake is immediately terminated with a log message
-					// containing the reason for the verification failure.
 					SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_PEER, ssl_verify_callback);
 				}
 				else
 				{
-					// The result of the certificate verification process can be checked
-					// after the TLS/SSL handshake using the SSL_get_verify_result function.
-					// The handshake will be continued regardless of the verification result.
-					SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_NONE, ssl_verify_callback);
+					SSL_CTX_set_verify(m_ssl_context, SSL_VERIFY_NONE, ssl_verify_callback_ignore);
 				}
 
 				const std::string& cert = m_ssl->cert();
