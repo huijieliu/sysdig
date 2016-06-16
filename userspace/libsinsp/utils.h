@@ -100,18 +100,41 @@ public:
 ///////////////////////////////////////////////////////////////////////////////
 // little STL thing to sanitize strings
 ///////////////////////////////////////////////////////////////////////////////
+
+inline bool is_invalid_char(char c)
+{
+	if (c < -1)
+	{
+		return true;
+	}
+
+	return !isprint((unsigned)c);
+}
+
 struct g_invalidchar
 {
-    bool operator()(char c) const 
+    bool operator()(char c) const
 	{
-		if(c < -1)
-		{
-			return true;
-		}
-
-		return !isprint((unsigned)c);
+		return is_invalid_char(c);
     }
 };
+
+inline void sanitize_string(string &str)
+{
+	uint32_t i, j;
+
+	while (j < str.length())
+	{
+		if (is_invalid_char(str[j]))
+		{
+			j++;
+		} else {
+			str[i++] = str[j++];
+		}
+	}
+
+	str.resize(i);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Time utility functions.
