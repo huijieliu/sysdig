@@ -121,7 +121,7 @@ struct g_invalidchar
 
 inline void sanitize_string(string &str)
 {
-	uint32_t i, j;
+	uint32_t i=0, j=0;
 
 	while (j < str.length())
 	{
